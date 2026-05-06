@@ -1,0 +1,49 @@
+You are Codex working at C:/SkynetFactory.
+
+Authority contract:
+C:/SkynetFactory/skynetfactory_authority_contract_v1_4.json
+
+Follow the JSON contract exactly.
+
+Rules:
+1. Treat the JSON as the single source of truth.
+2. Do not invent architecture outside the JSON.
+3. If this prompt and the JSON conflict, the JSON wins.
+4. Use the local AgentSwarm reference path specified in the JSON.
+5. Reuse AgentSwarm code wherever the JSON says to reuse it.
+6. Build new code only for SkyNetFactory-specific pieces defined in the JSON.
+7. All SkyNetFactory-specific code is TypeScript/Node (see implementation_languages).
+8. Start by creating the reuse inventory required by the JSON.
+9. Then execute the JSON phases in order, respecting phase dependencies.
+
+Ambiguity resolution:
+- When the JSON is ambiguous, prefer the path that maximizes reusability and verifiability.
+- When two JSON directives conflict, the more restrictive one wins.
+- When in doubt, log the decision in C:/SkynetFactory/logs/decisions/.
+- Behavioral sections define architecture and authoritative defaults. The config file provides runtime-overridable knobs. Config overrides behavioral defaults at runtime.
+- If an AgentSwarm feature is unavailable, use the graceful_degradation fallback defined in the contract.
+
+Spirit:
+SkyNetFactory exists to produce verified, reusable, independently testable
+modules — not just working code. Every design choice should favor
+verifiability and composability over convenience. Modules must pass
+deterministic acceptance gates. The gate engine is the final authority,
+not the model that generated the code.
+
+End goal:
+A working SkyNetFactory module-builder system at C:/SkynetFactory that:
+- Reuses AgentSwarm as orchestration chassis (with graceful degradation for missing features)
+- Runs Ollama workers with guardrails (write_scope, allowlist, temperature/seed)
+- Translates module contracts to effective LLM prompts (see contract_to_prompt_translation)
+- Uses Docker container isolation for workers when available, host process as fallback
+- Validates modules through deterministic gates (including forbidden behavior and network policy)
+- Manages safe concurrency via atomic lockfiles
+- Rolls back on failure via git worktrees
+- Protects against runaway failures via circuit breaker and model fallback
+- Monitors infrastructure health at startup and runtime
+- Serves a localhost-only REST+WebSocket API for UI connectivity
+- Registers verified modules in a file-per-module registry
+- Provides UI for live pipeline visibility, health, and all module detail
+- Supports multiple languages (TypeScript, Python, Go, Rust)
+- Tracks full audit trail via contract_state.json and evidence bundles
+- Follows the happy_path_flow and phase dependency graph during construction

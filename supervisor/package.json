@@ -1,0 +1,27 @@
+{
+  "name": "skynetfactory-supervisor",
+  "version": "1.4.0",
+  "description": "SkyNetFactory module-builder supervisor",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "fastify": "^5.3.0",
+    "@fastify/websocket": "^11.0.0",
+    "chokidar": "^4.0.0",
+    "ajv": "^8.17.0",
+    "uuid": "^10.0.0",
+    "pino": "^9.5.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "tsx": "^4.19.0",
+    "@types/node": "^22.0.0",
+    "@types/uuid": "^10.0.0",
+    "vitest": "^3.0.0"
+  }
+}

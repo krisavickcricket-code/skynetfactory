@@ -1,0 +1,172 @@
+[
+  {
+    "agent_swarm_component": "HTTP API server (src/http/core.ts, src/http/index.ts)",
+    "observed_path": "src/http/",
+    "capability": "REST API server with route definitions, JSON responses, OpenAPI",
+    "reuse_decision": "wrap",
+    "reason": "AgentSwarm uses a custom Node HTTP server. It cannot be extended with SkyNetFactory routes directly (different route system, API key auth). SkyNetFactory will run its own Fastify server and communicate with AgentSwarm via its API.",
+    "skynetfactory_mapping": "supervisor_api_server (build_new Fastify, uses AgentSwarm API as downstream)",
+    "patch_required": false,
+    "risk": "low"
+  },
+  {
+    "agent_swarm_component": "Task creation (src/http/tasks.ts, POST /api/tasks)",
+    "observed_path": "src/http/tasks.ts",
+    "capability": "Create and manage tasks via HTTP API",
+    "reuse_decision": "wrap",
+    "reason": "SkyNetFactory can create AgentSwarm tasks by posting to /api/tasks. Need a translation layer from module contracts to AgentSwarm task format.",
+    "skynetfactory_mapping": "contract_lifecycle adapter (submitTaskToAgentSwarm)",
+    "patch_required": false,
+    "risk": "low"
+  },
+  {
+    "agent_swarm_component": "Task polling (src/http/poll.ts, GET /api/poll)",
+    "observed_path": "src/http/poll.ts",
+    "capability": "Workers poll for tasks, claim tasks, report completion",
+    "reuse_decision": "wrap",
+    "reason": "AgentSwarm's poll mechanism is designed for Claude workers. SkyNetFactory Ollama workers need a different adapter but can use the underlying task state model.",
+    "skynetfactory_mapping": "ollama_worker_adapter (polls SkyNetFactory supervisor, not AgentSwarm directly)",
+    "patch_required": false,
+    "risk": "medium"
+  },
+  {
+    "agent_swarm_component": "Task queue / scheduling (src/tasks/, src/scheduler/)",
+    "observed_path": "src/tasks/, src/scheduler/",
+    "capability": "Task queue with priority, sibling awareness, scheduled tasks",
+    "reuse_decision": "reuse",
+    "reason": "AgentSwarm has a mature task queue with SQLite backend, priority management, and deduplication. SkyNetFactory can submit tasks to this queue via the API.",
+    "skynetfactory_mapping": "contract-to-task translation layer submits to AgentSwarm queue",
+    "patch_required": false,
+    "risk": "low"
+  },
+  {
+    "agent_swarm_component": "Worker lifecycle / Docker containers (Dockerfile.worker, docker-compose.example.yml)",
+    "observed_path": "Dockerfile.worker, docker-compose.example.yml",
+    "capability": "Docker worker containers with full dev environment",
+    "reuse_decision": "extend",
+    "reason": "AgentSwarm's Docker worker has a full dev environment. SkyNetFactory needs to customize it for Ollama workers (add Ollama client, different entrypoint). Can extend the base Dockerfile.",
+    "skynetfactory_mapping": "ollama_worker_adapter.worker_execution_environment.docker_container",
+    "patch_required": true,
+    "risk": "medium"
+  },
+  {
+    "agent_swarm_component": "Event system (src/http/events.ts, src/be/events)",
+    "observed_path": "src/http/events.ts",
+    "capability": "Event storage and querying via HTTP API",
+    "reuse_decision": "wrap",
+    "reason": "AgentSwarm has event storage but no websocket push. SkyNetFactory will poll events and push to its own WebSocket clients.",
+    "skynetfactory_mapping": "event_streaming (supervisor polls AgentSwarm events, pushes via WebSocket)",
+    "patch_required": false,
+    "risk": "low"
+  },
+  {
+    "agent_swarm_component": "WebSocket event push",
+    "observed_path": "N/A",
+    "capability": "Real-time event push to clients",
+    "reuse_decision": "build_new",
+    "reason": "AgentSwarm does not have a websocket push system. Uses polling. SkyNetFactory builds its own WebSocket server for UI.",
+    "skynetfactory_mapping": "supervisor_api_server WebSocket at ws://localhost:3013/skynetfactory/events",
+    "patch_required": false,
+    "risk": "low"
+  },
+  {
+    "agent_swarm_component": "Database / SQLite state (src/be/db, src/be/db-queries)",
+    "observed_path": "src/be/",
+    "capability": "SQLite-backed state persistence, task/agent/memory storage",
+    "reuse_decision": "wrap",
+    "reason": "AgentSwarm uses its own SQLite schema. SkyNetFactory manages its own contract_state.json files and registry. Doesn't need AgentSwarm's DB directly.",
+    "skynetfactory_mapping": "contract_state tracking via JSON files, registry via JSON files",
+    "patch_required": false,
+    "risk": "low"
+  },
+  {
+    "agent_swarm_component": "Memory layer (src/be/memory)",
+    "observed_path": "src/be/memory",
+    "capability": "Vector search memory for agent learnings",
+    "reuse_decision": "build_new",
+    "reason": "SkyNetFactory doesn't need AgentSwarm's memory/vector system. Module state tracking is done via contract_state.json and evidence bundles.",
+    "skynetfactory_mapping": "N/A - SkyNetFactory uses file-based state tracking",
+    "patch_required": false,
+    "risk": "low"
+  },
+  {
+    "agent_swarm_component": "Logging layer (src/be/db-queries logs)",
+    "observed_path": "src/be/db-queries/",
+    "capability": "Task log storage in SQLite",
+    "reuse_decision": "build_new",
+    "reason": "SkyNetFactory has its own evidence bundle and logging structure (logs/evidence/, logs/failed_attempts/, logs/decisions/).",
+    "skynetfactory_mapping": "logs/evidence/<module_id>/<timestamp>/, logs/decisions/, logs/failed_attempts/",
+    "patch_required": false,
+    "risk": "low"
+  },
+  {
+    "agent_swarm_component": "Dashboard / UI (new-ui/, templates-ui/)",
+    "observed_path": "new-ui/, templates-ui/",
+    "capability": "Web dashboard for monitoring agents and tasks",
+    "reuse_decision": "build_new",
+    "reason": "AgentSwarm's dashboard is a Next.js web app for Claude worker monitoring. SkyNetFactory needs Electron with React for contract lifecycle, gate results, registry, and circuit breaker views. Fundamentally different UI requirements.",
+    "skynetfactory_mapping": "electron_ui at C:/SkynetFactory/ui/electron-app",
+    "patch_required": false,
+    "risk": "medium"
+  },
+  {
+    "agent_swarm_component": "Docker Compose deployment (docker-compose.example.yml, docker-compose.local.yml)",
+    "observed_path": "docker-compose.example.yml",
+    "capability": "Full Docker Compose orchestration for lead + workers",
+    "reuse_decision": "extend",
+    "reason": "Can extend AgentSwarm's Docker Compose to add SkyNetFactory supervisor and Ollama workers as additional services.",
+    "skynetfactory_mapping": "docker-compose with SkyNetFactory supervisor + Ollama workers added",
+    "patch_required": true,
+    "risk": "medium"
+  },
+  {
+    "agent_swarm_component": "Remediation / retry system",
+    "observed_path": "N/A",
+    "capability": "Built-in remediation with context injection mid-task",
+    "reuse_decision": "build_new",
+    "reason": "AgentSwarm doesn't have SkyNetFactory's specific remediation model (git rollback, gate failure, model fallback, circuit breaker). Need custom implementation.",
+    "skynetfactory_mapping": "retry_policy, circuit_breaker, rollback_policy",
+    "patch_required": false,
+    "risk": "low"
+  },
+  {
+    "agent_swarm_component": "Workspace persistence (docker-entrypoint.sh, working dirs)",
+    "observed_path": "docker-entrypoint.sh",
+    "capability": "Persistent workspaces for workers across container restarts",
+    "reuse_decision": "reuse",
+    "reason": "AgentSwarm's workspace persistence concept maps to SkyNetFactory's worktree strategy. The volume mount approach is reusable.",
+    "skynetfactory_mapping": "worktree persistence at C:/SkynetFactory/worktrees/<module_id>",
+    "patch_required": false,
+    "risk": "low"
+  },
+  {
+    "agent_swarm_component": "Pause/resume/task recovery",
+    "observed_path": "src/be/db (pauseTask, resumeTask functions)",
+    "capability": "Pause and resume tasks across deploys",
+    "reuse_decision": "reuse",
+    "reason": "AgentSwarm has pause/resume which SkyNetFactory can use for task management via the API.",
+    "skynetfactory_mapping": "contract lifecycle state management",
+    "patch_required": false,
+    "risk": "low"
+  },
+  {
+    "agent_swarm_component": "Workflow engine (src/workflows/)",
+    "observed_path": "src/workflows/",
+    "capability": "DAG-based workflow with approval gates, retries, structured I/O",
+    "reuse_decision": "build_new",
+    "reason": "AgentSwarm's workflow engine is for business process automation. SkyNetFactory's pipeline (pending→claimed→building→testing→completed) is a state machine with deterministic gates, not a DAG workflow. Different model.",
+    "skynetfactory_mapping": "contract_lifecycle state machine with guard conditions",
+    "patch_required": false,
+    "risk": "low"
+  },
+  {
+    "agent_swarm_component": "Integration hooks (src/hooks/)",
+    "observed_path": "src/hooks/",
+    "capability": "Webhook and integration hooks for task lifecycle events",
+    "reuse_decision": "wrap",
+    "reason": "Can use AgentSwarm's hook system to get notified of task lifecycle events that correspond to module build progress.",
+    "skynetfactory_mapping": "event_streaming subscription to AgentSwarm task events",
+    "patch_required": false,
+    "risk": "low"
+  }
+]

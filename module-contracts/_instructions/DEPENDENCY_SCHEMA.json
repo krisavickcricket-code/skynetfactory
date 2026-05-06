@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "skynetfactory://schemas/dependency/v1.1",
+  "title": "SkyNetFactoryDependency",
+  "description": "Schema for a module dependency declaration.",
+  "type": "object",
+  "required": ["module_id","version_constraint"],
+  "properties": {
+    "module_id": {
+      "type": "string",
+      "description": "SkyNetFactory module dependency, or 'npm:<package>', 'pip:<package>', 'go:<module>' for externals"
+    },
+    "version_constraint": { "type": "string" },
+    "required_at": { "type": "string", "enum": ["build","runtime","test"], "default": "runtime" },
+    "optional": { "type": "boolean", "default": false }
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "skynetfactory://schemas/api/v1.1",
+  "title": "SkyNetFactoryAPI",
+  "description": "API surface definition for a SkyNetFactory module.",
+  "type": "object",
+  "required": ["style"],
+  "properties": {
+    "style": {
+      "type": "string",
+      "enum": ["http","cli","library","grpc","websocket"],
+      "description": "The API surface style"
+    },
+    "base_path": { "type": "string" },
+    "endpoints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["method","path","description"],
+        "properties": {
+          "method": { "type": "string", "enum": ["GET","POST","PUT","DELETE","PATCH"] },
+          "path": { "type": "string" },
+          "input_schema": { "type": "string" },
+          "output_schema": { "type": "string" },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "cli_commands": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name","description"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "arguments": { "type": "array", "items": { "type": "object" } },
+          "options": { "type": "array", "items": { "type": "object" } }
+        }
+      }
+    },
+    "schemas": {
+      "type": "object",
+      "additionalProperties": { "type": "object" }
+    }
+  }
+}

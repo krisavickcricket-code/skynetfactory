@@ -1,0 +1,17 @@
+{
+  "title": "Guides",
+  "pages": [
+    "deployment",
+    "secrets-encryption",
+    "harness-configuration",
+    "harness-providers",
+    "provider-auth",
+    "slack-integration",
+    "github-integration",
+    "gitlab-integration",
+    "agentmail-integration",
+    "sentry-integration",
+    "jira-integration",
+    "x402-payments"
+  ]
+}

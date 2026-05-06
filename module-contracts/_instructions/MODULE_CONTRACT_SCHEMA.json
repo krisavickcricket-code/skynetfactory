@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "skynetfactory://schemas/module-contract/v1.1",
+  "title": "SkyNetFactoryModuleContract",
+  "description": "Schema for a SkyNetFactory module contract — a reusable capability specification.",
+  "type": "object",
+  "required": [
+    "module_id", "version", "category", "capability_type", "purpose",
+    "reuse_scope", "language", "runtime", "api", "dependencies",
+    "sidecar_specification", "acceptance_gates", "vm_test_requirements",
+    "forbidden_behaviors", "agent_notes"
+  ],
+  "properties": {
+    "module_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+\\.[a-z0-9_]+$",
+      "description": "Domain-qualified module identifier, e.g. storage.integrity_verifier"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Semantic version of this contract"
+    },
+    "category": { "type": "string" },
+    "capability_type": {
+      "type": "string",
+      "enum": ["validator","transformer","provider","gateway","harness","indexer","adapter","analyzer","generator"]
+    },
+    "purpose": { "type": "string", "minLength": 20 },
+    "reuse_scope": { "type": "array", "items": { "type": "string", "minLength": 5 }, "minItems": 1 },
+    "language": { "type": "string", "enum": ["typescript","javascript","python","go","rust"] },
+    "runtime": { "type": "string", "enum": ["node","deno","bun","python3","go","native"] },
+    "api": { "$ref": "api_schema.json" },
+    "dependencies": {
+      "type": "array",
+      "items": { "$ref": "dependency_schema.json" }
+    },
+    "sidecar_specification": { "$ref": "sidecar_schema.json" },
+    "network_requirements": {
+      "type": "object",
+      "properties": {
+        "requires_network": { "type": "boolean", "default": false },
+        "allowed_hosts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["host"],
+            "properties": {
+              "host": { "type": "string" },
+              "port": { "type": ["integer", "null"] },
+              "protocol": { "type": "string", "enum": ["http","https","tcp","udp"], "default": "https" },
+              "purpose": { "type": "string" }
+            }
+          }
+        },
+        "allow_localhost": { "type": "boolean", "default": true }
+      }
+    },
+    "acceptance_gates": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["structure_validation","contract_validation","sidecar_validation","unit_tests","contract_tests","docker_tests","write_scope_validation","forbidden_behavior_validation","network_policy_validation","registry_validation"]
+      },
+      "minItems": 1
+    },
+    "vm_test_requirements": {
+      "type": "object",
+      "required": ["dockerfile_required","compose_required","must_exit_zero"],
+      "properties": {
+        "dockerfile_required": { "type": "boolean" },
+        "compose_required": { "type": "boolean" },
+        "must_exit_zero": { "type": "boolean" },
+        "extra_services": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name","image"],
+            "properties": { "name": { "type": "string" }, "image": { "type": "string" }, "env": { "type": "object" } }
+          }
+        }
+      }
+    },
+    "forbidden_behaviors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["description","detection_method"],
+        "properties": {
+          "description": { "type": "string" },
+          "detection_method": {
+            "type": "string",
+            "enum": ["write_scope_check","network_egress_check","filesystem_mutation_diff","static_analysis","runtime_sandbox_policy","manual_review"]
+          },
+          "severity": { "type": "string", "enum": ["critical","high","medium","low"], "default": "high" },
+          "static_analysis_config": {
+            "type": "object",
+            "properties": {
+              "tool": { "type": "string", "enum": ["eslint","ruff","golangci-lint","clippy","custom"] },
+              "rules": { "type": "array", "items": { "type": "string" } },
+              "custom_command": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "agent_notes": {
+      "type": "object",
+      "properties": {
+        "implementation_hint": { "type": "string" },
+        "known_gotchas": { "type": "string" },
+        "preferred_approach": { "type": "string" },
+        "avoid_approach": { "type": "string" }
+      }
+    }
+  },
+  "additionalProperties": false
+}

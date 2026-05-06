@@ -1,0 +1,151 @@
+{
+  "module_id": "storage.integrity_verifier",
+  "version": "0.1.0",
+  "category": "storage",
+  "capability_type": "validator",
+  "purpose": "Verify copied artifacts against checksum manifests to detect data corruption or tampering in backup, deployment, and migration workflows.",
+  "reuse_scope": [
+    "backup verification systems",
+    "artifact deployment pipelines",
+    "data migration validation",
+    "disaster recovery checks"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/verify",
+        "input_schema": "VerifyRequest",
+        "output_schema": "VerifyResult",
+        "description": "Verify artifacts against checksum manifest."
+      },
+      {
+        "method": "GET",
+        "path": "/status/{task_id}",
+        "output_schema": "VerifyStatus",
+        "description": "Check status of a running verification task."
+      }
+    ],
+    "schemas": {
+      "VerifyRequest": {
+        "type": "object",
+        "required": ["manifest_path", "checksum_algorithm"],
+        "properties": {
+          "manifest_path": { "type": "string" },
+          "checksum_algorithm": { "type": "string", "enum": ["sha256", "sha512"] }
+        }
+      },
+      "VerifyResult": {
+        "type": "object",
+        "required": ["status", "checked_files", "failures"],
+        "properties": {
+          "status": { "type": "string", "enum": ["verified", "failed"] },
+          "checked_files": { "type": "integer" },
+          "failures": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "VerifyStatus": {
+        "type": "object",
+        "required": ["task_id", "state"],
+        "properties": {
+          "task_id": { "type": "string" },
+          "state": { "type": "string", "enum": ["running", "completed", "failed"] },
+          "progress_pct": { "type": "number" }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "purpose": "Verify copied artifacts against checksum manifests to detect corruption or tampering.",
+    "agent_usage": {
+      "when_to_use": "When you need to verify that files were copied or transferred without corruption. Ideal after backup operations, deployment pushes, or data migrations.",
+      "when_not_to_use": "When you need semantic content validation, format conversion verification, or comparison of file meaning rather than byte-level integrity.",
+      "example_workflow": "1) Generate checksum manifest with the module. 2) Copy artifacts to destination. 3) Call /verify with the manifest to validate."
+    },
+    "common_calls": [
+      {
+        "description": "Verify files against a manifest",
+        "method": "POST",
+        "path_or_command": "/api/v1/verify",
+        "input_example": { "manifest_path": "/data/manifest.json", "checksum_algorithm": "sha256" },
+        "output_example": { "status": "verified", "checked_files": 142, "failures": [] }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Manifest file not found or unreadable",
+        "symptom": "400 error with descriptive message",
+        "recovery": "Ensure manifest path is correct and file is readable",
+        "severity": "permanent"
+      },
+      {
+        "condition": "Checksum algorithm not supported",
+        "symptom": "400 error listing supported algorithms",
+        "recovery": "Use sha256 or sha512",
+        "severity": "permanent"
+      },
+      {
+        "condition": "Source artifact missing",
+        "symptom": "failure entry in result listing missing file path",
+        "recovery": "Restore or re-provision the missing artifact",
+        "severity": "transient"
+      }
+    ],
+    "composition_tags": ["storage", "verification", "checksum", "integrity", "backup"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Do not modify source artifacts being verified",
+      "detection_method": "filesystem_mutation_diff",
+      "severity": "critical"
+    },
+    {
+      "description": "Do not perform semantic content validation",
+      "detection_method": "static_analysis",
+      "severity": "high",
+      "static_analysis_config": {
+        "tool": "eslint",
+        "rules": ["no-eval", "no-implied-eval", "no-new-func"]
+      }
+    },
+    {
+      "description": "Do not require external network access",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Use Node crypto module to compute checksums. Keep API small and deterministic. Support streaming verification for large files.",
+    "known_gotchas": "Large manifests may cause memory pressure — consider streaming the manifest parse.",
+    "preferred_approach": "Streaming checksum computation with async generators",
+    "avoid_approach": "Loading entire files into memory before hashing"
+  }
+}

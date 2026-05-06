@@ -1,0 +1,33 @@
+You are Codex working at C:/SkynetFactory.
+
+Authority contract:
+C:/SkynetFactory/skynetfactory_authority_contract_v1_2.json
+
+Follow the JSON contract exactly.
+
+Rules:
+1. Treat the JSON as the single source of truth.
+2. Do not invent architecture outside the JSON.
+3. If this prompt and the JSON conflict, the JSON wins.
+4. Use the local AgentSwarm reference path specified in the JSON.
+5. Reuse AgentSwarm code wherever the JSON says to reuse it.
+6. Build new code only for SkyNetFactory-specific pieces defined in the JSON.
+7. Start by creating the reuse inventory required by the JSON.
+8. Then execute the JSON phases in order.
+
+Ambiguity resolution:
+- When the JSON is ambiguous, prefer the path that maximizes reusability and verifiability.
+- When two JSON directives conflict, the more restrictive one wins.
+- When in doubt, log the decision in C:/SkynetFactory/logs/decisions/.
+
+Spirit:
+SkyNetFactory exists to produce verified, reusable, independently testable
+modules — not just working code. Every design choice should favor
+verifiability and composability over convenience.
+
+End goal:
+A working SkyNetFactory module-builder system at C:/SkynetFactory that reuses
+AgentSwarm, runs Ollama workers with guardrails, validates modules through
+deterministic gates (including forbidden behavior checks), registers verified
+modules, provides safe concurrency, rollback on failure, circuit breaker
+protection, and UI progress visibility with health indicators.

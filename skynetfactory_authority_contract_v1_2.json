@@ -1,0 +1,1601 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "skynetfactory://authority-contract/v1.2.0",
+  "contract_id": "skynetfactory.authority_contract",
+  "contract_version": "1.2.0",
+  "document_type": "machine_readable_project_authority",
+  "updated_at": "2026-05-06T21:30:00.000000",
+  "execution_root": "C:\\SkynetFactory",
+
+  "meta": {
+    "primary_instruction": "Build SkyNetFactory exactly from this JSON contract. Treat this JSON as the single source of truth. Do not rely on prompt text for architecture details.",
+    "architecture_principle": "Architecture-as-Data: all durable implementation instructions must live in this JSON contract; the prompt is only a bootstrap loader.",
+    "ambiguity_resolution": {
+      "rule_1": "When JSON is ambiguous, prefer the path that maximizes reusability and verifiability.",
+      "rule_2": "When two instructions conflict, the more restrictive one wins.",
+      "rule_3": "When in doubt, log the decision in implementation notes under C:\\SkynetFactory\\logs\\decisions\\.",
+      "rule_4": "if_json_and_prompt_conflict: JSON wins.",
+      "rule_5": "Spirit: SkyNetFactory exists to produce verified, reusable, independently testable modules — not just working code. Every design choice should favor verifiability and composability over convenience."
+    },
+    "extractable_schemas": {
+      "note": "All schemas are defined inline below for single-source-of-truth convenience. They may be extracted to separate files under C:\\SkynetFactory\\module-contracts\\_instructions\\ during Phase 2, but the inline definitions here are authoritative.",
+      "schema_version_used": "JSON Schema Draft 2020-12"
+    }
+  },
+
+  "project_goal": "Build a reusable-module factory that consumes standardized JSON module contracts, uses AgentSwarm as a reuse-first orchestration chassis, dispatches Ollama workers to implement standalone modules, validates them through deterministic gates, registers verified modules, and provides a UI for real-time progress.",
+
+  "paths": {
+    "root": "C:\\SkynetFactory",
+    "agent_swarm_local_reference": "C:\\Agent-Swarm_ref\\agent-swarm-main\\agent-swarm-main",
+    "agent_swarm_working_copy": "C:\\SkynetFactory\\orchestration\\agent-swarm",
+    "module_contracts": {
+      "root": "C:\\SkynetFactory\\module-contracts",
+      "instructions": "C:\\SkynetFactory\\module-contracts\\_instructions",
+      "pending": "C:\\SkynetFactory\\module-contracts\\pending",
+      "claimed": "C:\\SkynetFactory\\module-contracts\\claimed",
+      "building": "C:\\SkynetFactory\\module-contracts\\building",
+      "testing": "C:\\SkynetFactory\\module-contracts\\testing",
+      "completed": "C:\\SkynetFactory\\module-contracts\\completed",
+      "remediation": "C:\\SkynetFactory\\module-contracts\\remediation",
+      "rejected": "C:\\SkynetFactory\\module-contracts\\rejected"
+    },
+    "production_modules": "C:\\SkynetFactory\\production-modules",
+    "worktrees": "C:\\SkynetFactory\\worktrees",
+    "supervisor": "C:\\SkynetFactory\\supervisor\\module-builder",
+    "agent_swarm_adapter": "C:\\SkynetFactory\\supervisor\\module-builder\\agent-swarm-adapter",
+    "worker_runtime": "C:\\SkynetFactory\\worker-runtime\\ollama-worker",
+    "ui": "C:\\SkynetFactory\\ui\\electron-app",
+    "orchestration": "C:\\SkynetFactory\\orchestration",
+    "reuse_inventory": "C:\\SkynetFactory\\orchestration\\AGENT_SWARM_REUSE_INVENTORY.json",
+    "registry": "C:\\SkynetFactory\\registry",
+    "registry_index": "C:\\SkynetFactory\\registry\\modules.json",
+    "config": "C:\\SkynetFactory\\config\\builder.config.json",
+    "logs": "C:\\SkynetFactory\\logs",
+    "logs_decisions": "C:\\SkynetFactory\\logs\\decisions",
+    "logs_evidence": "C:\\SkynetFactory\\logs\\evidence",
+    "logs_failed_attempts": "C:\\SkynetFactory\\logs\\failed_attempts",
+    "temp": "C:\\SkynetFactory\\temp",
+    "claims_locks": "C:\\SkynetFactory\\temp\\claims"
+  },
+
+  "bootstrap_rules": {
+    "prompt_must_be_minimal": true,
+    "json_is_authority": true,
+    "do_not_invent_architecture_outside_json": true,
+    "if_implementation_detail_missing": "inspect AgentSwarm first, then make smallest reasonable adapter decision and record it in C:\\SkynetFactory\\logs\\decisions\\",
+    "local_agent_swarm_source_required": true,
+    "clone_from_github_allowed": false,
+    "github_clone_exception": "Only clone if local_agent_swarm_reference is missing or unusable; record reason in logs."
+  },
+
+  "reuse_policy": {
+    "strategy": "reuse_agent_swarm_first",
+    "summary": "Reuse the local AgentSwarm repo as the orchestration chassis. Build new code only for SkyNetFactory-specific contracts, sidecars, gates, registry, Ollama adapter, and module-factory behavior.",
+    "priority_order": [
+      "reuse_existing_agent_swarm_code_without_changes",
+      "wrap_existing_agent_swarm_code_with_adapter",
+      "extend_existing_agent_swarm_code_with_minimal_patch",
+      "fork_existing_agent_swarm_code_only_if_required",
+      "build_new_code_only_when_no_agent_swarm_equivalent_exists"
+    ],
+    "must_inspect_before_coding": [
+      "README.md",
+      "DEPLOYMENT.md",
+      "docker-compose.example.yml",
+      "Dockerfile",
+      "Dockerfile.worker if present",
+      ".env.docker.example",
+      "docs/ENVS.md",
+      "API server entrypoint",
+      "CLI task intake",
+      "task queue / task pool",
+      "worker implementation",
+      "lead implementation",
+      "dashboard implementation if present",
+      "database or SQLite state layer",
+      "memory layer",
+      "logging layer",
+      "workspace persistence layer"
+    ],
+    "do_not_rebuild_if_agent_swarm_has_it": [
+      "task queue",
+      "worker scheduling",
+      "lead/worker lifecycle",
+      "Docker Compose deployment",
+      "Docker worker containers",
+      "API server",
+      "CLI task intake",
+      "task state storage",
+      "worker logs",
+      "persistent workspaces",
+      "pause/resume/task recovery",
+      "dashboard/progress plumbing",
+      "integration hooks"
+    ],
+    "build_new_only_for": [
+      "SkyNetFactory module contract authoring standard",
+      "SkyNetFactory module contract JSON schema",
+      "SkyNetFactory module sidecar JSON schema",
+      "contract-to-AgentSwarm task translator",
+      "Ollama provider or worker adapter",
+      "module folder initializer",
+      "final deterministic acceptance gate runner",
+      "write-scope validator",
+      "module registry writer",
+      "SkyNetFactory-specific UI panels only where AgentSwarm dashboard cannot be reused or extended"
+    ],
+    "required_output_before_coding": {
+      "path": "C:\\SkynetFactory\\orchestration\\AGENT_SWARM_REUSE_INVENTORY.json",
+      "description": "A reuse inventory mapping each SkyNetFactory subsystem to AgentSwarm code paths and a decision: reuse, wrap, extend, fork, or build_new.",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["agent_swarm_component", "observed_path", "capability", "reuse_decision", "reason", "skynetfactory_mapping", "patch_required", "risk"],
+          "properties": {
+            "agent_swarm_component": { "type": "string" },
+            "observed_path": { "type": "string" },
+            "capability": { "type": "string" },
+            "reuse_decision": { "type": "string", "enum": ["reuse", "wrap", "extend", "fork", "build_new"] },
+            "reason": { "type": "string" },
+            "skynetfactory_mapping": { "type": "string" },
+            "patch_required": { "type": "boolean" },
+            "risk": { "type": "string", "enum": ["low", "medium", "high"] }
+          }
+        }
+      }
+    }
+  },
+
+  "system_roles": {
+    "codex": {
+      "role": "builder_and_contract_factory",
+      "responsibilities": [
+        "Build the system from this JSON contract",
+        "Inspect local AgentSwarm and reuse code aggressively",
+        "Create standardized module contracts in pending when acting as contract factory",
+        "Maintain authoring standards and schemas"
+      ]
+    },
+    "agent_swarm": {
+      "role": "orchestration_chassis",
+      "responsibilities": [
+        "Provide task intake where reusable",
+        "Provide worker lifecycle where reusable",
+        "Provide Docker worker orchestration where reusable",
+        "Provide logs, workspaces, and dashboard/progress plumbing where reusable"
+      ]
+    },
+    "skynetfactory_supervisor": {
+      "role": "module_factory_controller",
+      "responsibilities": [
+        "Watch and validate module contracts",
+        "Translate contracts to AgentSwarm tasks",
+        "Initialize module folders/worktrees",
+        "Run final deterministic gates",
+        "Emit remediation tasks",
+        "Register verified modules"
+      ]
+    },
+    "ollama_workers": {
+      "role": "implementation_workers",
+      "responsibilities": [
+        "Receive scoped module build tasks",
+        "Use local Ollama models through API",
+        "Implement module code, tests, sidecar, Docker config, and docs",
+        "Return structured worker_result.json"
+      ]
+    },
+    "electron_ui": {
+      "role": "operator_visibility_layer",
+      "responsibilities": [
+        "Show live contract and module pipeline",
+        "Show worker/AgentSwarm status",
+        "Show logs and acceptance gate results",
+        "Show registry and module details",
+        "Build as Windows EXE"
+      ]
+    }
+  },
+
+  "folder_structure_required": [
+    "C:\\SkynetFactory\\module-contracts\\_instructions",
+    "C:\\SkynetFactory\\module-contracts\\pending",
+    "C:\\SkynetFactory\\module-contracts\\claimed",
+    "C:\\SkynetFactory\\module-contracts\\building",
+    "C:\\SkynetFactory\\module-contracts\\testing",
+    "C:\\SkynetFactory\\module-contracts\\completed",
+    "C:\\SkynetFactory\\module-contracts\\remediation",
+    "C:\\SkynetFactory\\module-contracts\\rejected",
+    "C:\\SkynetFactory\\production-modules",
+    "C:\\SkynetFactory\\worktrees",
+    "C:\\SkynetFactory\\supervisor\\module-builder",
+    "C:\\SkynetFactory\\worker-runtime\\ollama-worker",
+    "C:\\SkynetFactory\\ui\\electron-app",
+    "C:\\SkynetFactory\\orchestration",
+    "C:\\SkynetFactory\\registry",
+    "C:\\SkynetFactory\\logs",
+    "C:\\SkynetFactory\\logs\\decisions",
+    "C:\\SkynetFactory\\logs\\evidence",
+    "C:\\SkynetFactory\\logs\\failed_attempts",
+    "C:\\SkynetFactory\\config",
+    "C:\\SkynetFactory\\temp",
+    "C:\\SkynetFactory\\temp\\claims"
+  ],
+
+  "contract_lifecycle": {
+    "states": [
+      "pending",
+      "claimed",
+      "building",
+      "testing",
+      "completed",
+      "remediation",
+      "rejected"
+    ],
+    "transitions": {
+      "pending": {
+        "to": ["claimed"],
+        "guard": "no other contract with same module_id currently in {claimed, building, testing}",
+        "timeout_ms": null,
+        "on_timeout": null
+      },
+      "claimed": {
+        "to": ["building"],
+        "guard": "worker available and Ollama healthy",
+        "timeout_ms": 300000,
+        "on_timeout": "revert_to_pending_with_log"
+      },
+      "building": {
+        "to": ["testing", "remediation"],
+        "guard": null,
+        "timeout_ms": 1800000,
+        "on_timeout": "move_to_remediiation_with_reason_timeout",
+        "on_enter": "snapshot_worktree_clean_state"
+      },
+      "testing": {
+        "to": ["completed", "remediation"],
+        "guard": null,
+        "timeout_ms": 600000,
+        "on_timeout": "move_to_remediation_with_reason_timeout"
+      },
+      "remediation": {
+        "to": ["building", "rejected"],
+        "guard": "attempt_count <= max_remediation_attempts",
+        "timeout_ms": null,
+        "on_timeout": null,
+        "on_enter": "rollback_worktree_to_last_clean_snapshot"
+      },
+      "completed": {
+        "to": ["pending"],
+        "guard": "new_contract_submitted_with_higher_semver",
+        "timeout_ms": null,
+        "on_timeout": null
+      },
+      "rejected": {
+        "to": ["pending"],
+        "guard": "new_contract_submitted_with_remediation_address",
+        "timeout_ms": null,
+        "on_timeout": null
+      }
+    },
+    "max_remediation_attempts": 3
+  },
+
+  "concurrency_model": {
+    "claim_mechanism": "atomic_lockfile_per_contract",
+    "lock_path": "C:\\SkynetFactory\\temp\\claims",
+    "lock_naming": "<module_id>.lock",
+    "lock_timeout_ms": 30000,
+    "deadlock_detection": true,
+    "deadlock_check_interval_ms": 60000,
+    "parallel_workers_default": 2,
+    "rule": "Only one worker may process a given module_id at a time. Claim is established by creating a lockfile atomically. Lockfile must contain worker_id, claimed_at timestamp, and expected completion. Stale locks (older than lock_timeout_ms) are force-released with a warning log."
+  },
+
+  "rollback_policy": {
+    "worktree_strategy": "one_git_worktree_per_module",
+    "worktree_location": "C:\\SkynetFactory\\worktrees\\<module_id>",
+    "on_building_enter": "git commit a clean-slate snapshot tagged 'build-start-<timestamp>'",
+    "on_remediation_enter": "git reset --hard to last build-start tag, preserving failed attempt artifacts",
+    "preserve_failed_attempt_in": "C:\\SkynetFactory\\logs\\failed_attempts\\<module_id>\\<attempt_number>",
+    "failed_attempt_artifacts": [
+      "git diff from build-start tag",
+      "worker_result.json",
+      "gate_result.json",
+      "worker_logs"
+    ]
+  },
+
+  "retry_policy": {
+    "remediation_max_attempts": 3,
+    "backoff_strategy": "exponential",
+    "base_delay_ms": 15000,
+    "max_delay_ms": 300000,
+    "backoff_multiplier": 2,
+    "on_consecutive_ollama_failures": 3,
+    "circuit_breaker_trip_after": 5,
+    "circuit_breaker_reset_after_ms": 600000,
+    "circuit_breaker_half_open_allowed_attempts": 1,
+    "rule": "When a worker fails, wait base_delay_ms * (multiplier ^ attempt_number) before retrying. If 5 consecutive failures across any module occur, trip the circuit breaker — stop dispatching new tasks, wait reset period, then allow 1 probe task. If probe succeeds, resume. If probe fails, continue waiting."
+  },
+
+  "llm_determinism": {
+    "strategy": "gated_retry_with_low_temperature",
+    "default_temperature": 0.1,
+    "seed_control_available": true,
+    "seed_rotation_on_retry": true,
+    "on_gate_failure": "retry with incremented seed up to max_remediation_attempts, then remediation with different model if available",
+    "model_fallback_chain": [
+      "qwen3-coder",
+      "deepseek-coder",
+      "glm",
+      "kimi"
+    ],
+    "fallback_trigger": "3 consecutive gate failures with same model",
+    "note": "LLM output is inherently non-deterministic. The gate engine provides the deterministic verification layer that compensates for model stochasticity. Low temperature and seed control reduce variance but do not eliminate it. The gate engine is the final authority, not the model."
+  },
+
+  "health_checks": {
+    "startup_probes": [
+      {
+        "name": "ollama",
+        "url": "http://localhost:11434/api/tags",
+        "method": "GET",
+        "expected_status": 200,
+        "timeout_ms": 5000,
+        "required": true,
+        "on_failure": "halt_with_error: Ollama not available at configured URL"
+      },
+      {
+        "name": "ollama_default_model",
+        "url": "http://localhost:11434/api/tags",
+        "method": "GET",
+        "expected_status": 200,
+        "timeout_ms": 5000,
+        "validate": "response contains default_model in model list",
+        "required": true,
+        "on_failure": "warn: default model not pulled, attempt pull or fallback"
+      },
+      {
+        "name": "agent_swarm_api",
+        "url": "http://localhost:3013/health",
+        "method": "GET",
+        "expected_status": 200,
+        "timeout_ms": 5000,
+        "required": false,
+        "on_failure": "warn: AgentSwarm API not reachable, will retry on task submission",
+        "retry_on_failure_interval_ms": 10000,
+        "retry_on_failure_max": 6
+      }
+    ],
+    "runtime_probes_interval_ms": 30000,
+    "runtime_probes": [
+      {
+        "name": "ollama_heartbeat",
+        "url": "http://localhost:11434/api/tags",
+        "method": "GET",
+        "timeout_ms": 3000
+      },
+      {
+        "name": "agent_swarm_heartbeat",
+        "url": "http://localhost:3013/health",
+        "method": "GET",
+        "timeout_ms": 3000
+      }
+    ],
+    "on_runtime_probe_failure": "log warning and update UI health indicator; if consecutive failures exceed circuit_breaker_trip_after, pause task dispatch"
+  },
+
+  "module_contract_authoring_standard": {
+    "location": "C:\\SkynetFactory\\module-contracts\\_instructions",
+    "principle": "A module contract is not a feature request. It is a reusable capability specification.",
+    "required_instruction_files": [
+      "CONTRACT_AUTHORING_STANDARD.md",
+      "MODULE_CONTRACT_SCHEMA.json",
+      "SIDECAR_SCHEMA.json",
+      "WORKER_RESULT_SCHEMA.json",
+      "REGISTRY_ENTRY_SCHEMA.json",
+      "QUALITY_BAR.md",
+      "NAMING_RULES.md",
+      "EXAMPLES/storage.integrity_verifier.json"
+    ],
+    "naming_rule": {
+      "format": "<domain>.<capability_name>",
+      "examples": [
+        "storage.integrity_verifier",
+        "auth.jwt_validator",
+        "api.rate_limiter",
+        "testing.docker_vm_harness",
+        "registry.module_indexer"
+      ],
+      "forbidden": [
+        "vague helpers",
+        "app-specific feature names unless generalized",
+        "spaces",
+        "version numbers in module_id"
+      ]
+    },
+    "granularity_rules": [
+      "One clear reusable capability per module",
+      "API or CLI boundary required",
+      "Tests required",
+      "Sidecar required",
+      "Docker/VM-style test required",
+      "Dependencies must be declared as contracts",
+      "Failure modes must be documented"
+    ],
+    "module_contract_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "skynetfactory://schemas/module-contract/v1.0",
+      "title": "SkyNetFactoryModuleContract",
+      "description": "Schema for a SkyNetFactory module contract — a reusable capability specification.",
+      "type": "object",
+      "required": [
+        "module_id",
+        "version",
+        "category",
+        "capability_type",
+        "purpose",
+        "reuse_scope",
+        "language",
+        "runtime",
+        "api",
+        "dependencies",
+        "sidecar_requirements",
+        "acceptance_gates",
+        "vm_test_requirements",
+        "forbidden_behaviors",
+        "agent_notes"
+      ],
+      "properties": {
+        "module_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+\\.[a-z0-9_]+$",
+          "description": "Domain-qualified module identifier, e.g. storage.integrity_verifier"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+          "description": "Semantic version of this contract"
+        },
+        "category": {
+          "type": "string",
+          "description": "Broad domain category: storage, auth, api, testing, registry, etc."
+        },
+        "capability_type": {
+          "type": "string",
+          "enum": ["validator", "transformer", "provider", "gateway", "harness", "indexer", "adapter", "analyzer", "generator"],
+          "description": "The kind of capability this module provides"
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 20,
+          "description": "Clear, specific statement of what this module does and why it exists"
+        },
+        "reuse_scope": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 5 },
+          "minItems": 1,
+          "description": "List of contexts where this module could be reused"
+        },
+        "language": {
+          "type": "string",
+          "enum": ["typescript", "javascript", "python", "go", "rust"],
+          "description": "Primary implementation language"
+        },
+        "runtime": {
+          "type": "string",
+          "enum": ["node", "deno", "bun", "python3", "go", "native"],
+          "description": "Runtime environment"
+        },
+        "api": {
+          "$ref": "skynetfactory://schemas/module-contract/api-schema",
+          "description": "API surface definition"
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "skynetfactory://schemas/module-contract/dependency-schema"
+          },
+          "description": "Declared dependencies on other SkyNetFactory modules or external packages"
+        },
+        "sidecar_requirements": {
+          "$ref": "skynetfactory://schemas/sidecar/v1.0",
+          "description": "Requirements for the module's sidecar metadata document"
+        },
+        "acceptance_gates": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "structure_validation",
+              "contract_validation",
+              "sidecar_validation",
+              "unit_tests",
+              "contract_tests",
+              "docker_tests",
+              "write_scope_validation",
+              "forbidden_behavior_validation",
+              "registry_validation"
+            ]
+          },
+          "minItems": 1,
+          "description": "List of gate names that must all pass (AND logic) for module completion"
+        },
+        "vm_test_requirements": {
+          "type": "object",
+          "required": ["dockerfile_required", "compose_required", "must_exit_zero"],
+          "properties": {
+            "dockerfile_required": { "type": "boolean" },
+            "compose_required": { "type": "boolean" },
+            "must_exit_zero": { "type": "boolean" },
+            "extra_services": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "image": { "type": "string" },
+                  "env": { "type": "object" }
+                }
+              },
+              "description": "Additional docker-compose services needed for testing"
+            }
+          }
+        },
+        "forbidden_behaviors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["description", "detection_method"],
+            "properties": {
+              "description": {
+                "type": "string",
+                "description": "What must not happen"
+              },
+              "detection_method": {
+                "type": "string",
+                "enum": ["write_scope_check", "network_egress_check", "filesystem_mutation_diff", "static_analysis", "runtime_sandbox_policy", "manual_review"],
+                "description": "How this forbidden behavior is detected or enforced"
+              },
+              "severity": {
+                "type": "string",
+                "enum": ["critical", "high", "medium", "low"],
+                "default": "high"
+              }
+            }
+          },
+          "description": "Behaviors this module must not exhibit, with enforcement method"
+        },
+        "agent_notes": {
+          "type": "object",
+          "properties": {
+            "implementation_hint": { "type": "string" },
+            "known_gotchas": { "type": "string" },
+            "preferred_approach": { "type": "string" },
+            "avoid_approach": { "type": "string" }
+          },
+          "description": "Hints and guidance for the implementing worker agent"
+        }
+      },
+      "additionalProperties": false
+    },
+    "api_sub_schema": {
+      "$id": "skynetfactory://schemas/module-contract/api-schema",
+      "type": "object",
+      "required": ["style"],
+      "properties": {
+        "style": {
+          "type": "string",
+          "enum": ["http", "cli", "library", "grpc", "websocket"],
+          "description": "The API surface style"
+        },
+        "base_path": {
+          "type": "string",
+          "description": "Base URL path for HTTP APIs, e.g. /api/v1"
+        },
+        "endpoints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["method", "path", "description"],
+            "properties": {
+              "method": { "type": "string", "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"] },
+              "path": { "type": "string" },
+              "input_schema": { "type": "string", "description": "Reference name for request body schema" },
+              "output_schema": { "type": "string", "description": "Reference name for response body schema" },
+              "description": { "type": "string" }
+            }
+          },
+          "description": "List of API endpoints (for http style)"
+        },
+        "cli_commands": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "description"],
+            "properties": {
+              "name": { "type": "string" },
+              "description": { "type": "string" },
+              "arguments": { "type": "array", "items": { "type": "object" } },
+              "options": { "type": "array", "items": { "type": "object" } }
+            }
+          },
+          "description": "List of CLI commands (for cli style)"
+        },
+        "schemas": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "description": "Named JSON Schema objects for request/response validation"
+          },
+          "description": "Named schema definitions referenced by endpoints"
+        }
+      }
+    },
+    "dependency_sub_schema": {
+      "$id": "skynetfactory://schemas/module-contract/dependency-schema",
+      "type": "object",
+      "required": ["module_id", "version_constraint"],
+      "properties": {
+        "module_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+\\.[a-z0-9_]+$",
+          "description": "SkyNetFactory module dependency, or 'npm:<package>', 'pip:<package>' for externals"
+        },
+        "version_constraint": {
+          "type": "string",
+          "description": "Semver constraint, e.g. ^0.1.0, >=1.0.0, *"
+        },
+        "required_at": {
+          "type": "string",
+          "enum": ["build", "runtime", "test"],
+          "default": "runtime",
+          "description": "When this dependency is needed"
+        },
+        "optional": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether the dependency is optional (graceful degradation if missing)"
+        }
+      }
+    },
+    "sidecar_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "skynetfactory://schemas/sidecar/v1.0",
+      "title": "SkyNetFactoryModuleSidecar",
+      "description": "Sidecar metadata for a SkyNetFactory module — usage guide for consuming agents.",
+      "type": "object",
+      "required": [
+        "module_id",
+        "version",
+        "purpose",
+        "agent_usage",
+        "common_calls",
+        "failure_modes",
+        "composition_tags"
+      ],
+      "properties": {
+        "module_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+\\.[a-z0-9_]+$"
+        },
+        "version": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 10
+        },
+        "agent_usage": {
+          "type": "object",
+          "required": ["when_to_use", "when_not_to_use"],
+          "properties": {
+            "when_to_use": {
+              "type": "string",
+              "minLength": 10
+            },
+            "when_not_to_use": {
+              "type": "string",
+              "minLength": 10
+            },
+            "example_workflow": {
+              "type": "string"
+            }
+          }
+        },
+        "common_calls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["description", "method", "path_or_command"],
+            "properties": {
+              "description": { "type": "string" },
+              "method": { "type": "string" },
+              "path_or_command": { "type": "string" },
+              "input_example": { "type": "object" },
+              "output_example": { "type": "object" }
+            }
+          },
+          "minItems": 1
+        },
+        "failure_modes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["condition", "symptom", "recovery"],
+            "properties": {
+              "condition": { "type": "string" },
+              "symptom": { "type": "string" },
+              "recovery": { "type": "string" },
+              "severity": { "type": "string", "enum": ["transient", "permanent"], "default": "transient" }
+            }
+          },
+          "minItems": 1
+        },
+        "composition_tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Tags for module composition and discovery, e.g. storage, verification, checksum"
+        }
+      },
+      "additionalProperties": false
+    },
+    "worker_result_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "skynetfactory://schemas/worker-result/v1.0",
+      "title": "SkyNetFactoryWorkerResult",
+      "description": "Structured output from an Ollama worker after implementing a module.",
+      "type": "object",
+      "required": ["task_id", "module_id", "status", "changed_files", "evidence"],
+      "properties": {
+        "task_id": { "type": "string" },
+        "module_id": { "type": "string" },
+        "status": { "type": "string", "enum": ["passed", "failed", "partial"] },
+        "changed_files": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Absolute paths of all files created or modified"
+        },
+        "tests_run": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "test_name": { "type": "string" },
+              "result": { "type": "string", "enum": ["pass", "fail", "skip", "error"] },
+              "duration_ms": { "type": "number" },
+              "output_snippet": { "type": "string" }
+            }
+          }
+        },
+        "docker_result": {
+          "type": "object",
+          "properties": {
+            "exit_code": { "type": "number" },
+            "output_snippet": { "type": "string" },
+            "containers_started": { "type": "number" }
+          }
+        },
+        "known_issues": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "description": { "type": "string" },
+              "severity": { "type": "string", "enum": ["critical", "high", "medium", "low", "info"] },
+              "suggested_fix": { "type": "string" }
+            }
+          }
+        },
+        "evidence": {
+          "type": "object",
+          "required": ["model_used", "prompt_hash", "write_scope_declared"],
+          "properties": {
+            "model_used": { "type": "string" },
+            "model_version": { "type": "string" },
+            "temperature": { "type": "number" },
+            "seed": { "type": ["number", "null"] },
+            "prompt_hash": { "type": "string", "description": "SHA256 of the full prompt sent to the model" },
+            "write_scope_declared": { "type": "array", "items": { "type": "string" } },
+            "commands_executed": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Allowed commands that were run"
+            },
+            "files_written_log": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "path": { "type": "string" },
+                  "size_bytes": { "type": "number" },
+                  "sha256": { "type": "string" }
+                }
+              }
+            },
+            "duration_ms": { "type": "number" }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "registry_entry_schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "skynetfactory://schemas/registry-entry/v1.0",
+      "title": "SkyNetFactoryRegistryEntry",
+      "description": "A verified module entry in the SkyNetFactory registry.",
+      "type": "object",
+      "required": [
+        "module_id",
+        "version",
+        "category",
+        "capability_type",
+        "path",
+        "contract_path",
+        "sidecar_path",
+        "status",
+        "contract_hash",
+        "created_at",
+        "updated_at",
+        "tags",
+        "acceptance_evidence_path"
+      ],
+      "properties": {
+        "module_id": { "type": "string", "pattern": "^[a-z0-9_]+\\.[a-z0-9_]+$" },
+        "version": { "type": "string" },
+        "category": { "type": "string" },
+        "capability_type": { "type": "string" },
+        "path": { "type": "string", "description": "Absolute path to the production module directory" },
+        "contract_path": { "type": "string", "description": "Path to the module.contract.json" },
+        "sidecar_path": { "type": "string", "description": "Path to the module.sidecar.json" },
+        "status": { "type": "string", "enum": ["verified", "deprecated", "superseded"] },
+        "contract_hash": { "type": "string", "description": "SHA256 of the module.contract.json for tamper detection" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "acceptance_evidence_path": { "type": "string" },
+        "agent_swarm_task_id": { "type": "string" },
+        "remediation_history": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "attempt": { "type": "number" },
+              "remediated_at": { "type": "string", "format": "date-time" },
+              "reason": { "type": "string" },
+              "model_used": { "type": "string" }
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+
+  "agent_swarm_integration": {
+    "source_type": "local_copied_repo",
+    "local_reference_path": "C:\\Agent-Swarm_ref\\agent-swarm-main\\agent-swarm-main",
+    "working_copy_path": "C:\\SkynetFactory\\orchestration\\agent-swarm",
+    "copy_instruction": "Copy or mirror local_reference_path to working_copy_path. Keep reference copy untouched.",
+    "clone_from_github": false,
+    "integration_mode": "reuse_first_local_working_copy",
+    "adapter_location": "C:\\SkynetFactory\\supervisor\\module-builder\\agent-swarm-adapter",
+    "event_streaming": {
+      "method": "websocket_or_polling",
+      "direction": "bidirectional",
+      "description": "AgentSwarm should stream task events (started, progress, partial_failure, completed) to SkyNetFactory supervisor. SkyNetFactory supervisor should be able to send remediation_guidance mid-task if supported."
+    },
+    "task_translation": {
+      "input": "SkyNetFactory module contract JSON",
+      "output": "AgentSwarm-compatible task",
+      "rules": [
+        "Contract JSON is authoritative payload",
+        "module_id must be included in task title and metadata",
+        "write_scope must be included and enforced after completion",
+        "acceptance gates must be included but final verification is done by SkyNetFactory gate runner",
+        "worker logs must be streamed or copied into SkyNetFactory logs"
+      ]
+    },
+    "required_adapter_functions": [
+      "loadContract(contractPath)",
+      "validateContract(contract)",
+      "createAgentSwarmTask(contract, taskPacket)",
+      "submitTaskToAgentSwarm(task)",
+      "pollOrStreamAgentSwarmTask(taskId)",
+      "streamTaskEvents(taskId, callback)",
+      "normalizeAgentSwarmResult(taskId)",
+      "writeWorkerResultJson(result)",
+      "cancelAgentSwarmTask(taskId)",
+      "retryWithRemediation(remediationPacket)",
+      "requestRemediationGuidance(taskId, context)"
+    ]
+  },
+
+  "ollama_worker_adapter": {
+    "goal": "Let AgentSwarm schedule workers that use local Ollama models to implement modules.",
+    "ollama_urls": {
+      "host": "http://localhost:11434",
+      "docker_container": "http://host.docker.internal:11434"
+    },
+    "default_model": "qwen3-coder",
+    "fallback_models": [
+      "deepseek-coder",
+      "glm",
+      "kimi"
+    ],
+    "default_temperature": 0.1,
+    "seed_control": true,
+    "worker_input": {
+      "task_packet": "task_packet.json",
+      "module_contract": "module contract JSON",
+      "write_scope": "array of allowed paths",
+      "production_module_path": "path"
+    },
+    "worker_output": {
+      "required_file": "worker_result.json",
+      "schema_ref": "skynetfactory://schemas/worker-result/v1.0"
+    },
+    "tool_guards": [
+      "Path traversal prevention: reject any path containing '..' or outside declared write_scope",
+      "Write-scope enforcement: all file writes must be within declared scope or module metadata paths",
+      "Command allowlist: only explicitly listed commands may be executed",
+      "Timeout enforcement: all commands must complete within configured timeout",
+      "Log every file write: record path, size, and SHA256",
+      "Log every command execution: record command, exit code, duration",
+      "Network egress monitoring: flag any network calls not declared in contract"
+    ],
+    "allowed_commands": [
+      "npm install",
+      "npm test",
+      "npm run build",
+      "npm run test:contract",
+      "docker compose",
+      "git diff",
+      "git status",
+      "git log",
+      "node",
+      "npx",
+      "tsc",
+      "eslint"
+    ],
+    "disallowed_patterns": [
+      "npm publish",
+      "git push",
+      "curl",
+      "wget",
+      "Invoke-WebRequest",
+      "Start-Process"
+    ]
+  },
+
+  "module_output_required_structure": {
+    "template": "C:\\SkynetFactory\\production-modules\\<module_id>",
+    "required_paths": [
+      "src/",
+      "tests/unit/",
+      "tests/contract/",
+      "examples/",
+      "module.contract.json",
+      "module.sidecar.json",
+      "Dockerfile",
+      "docker-compose.test.yml",
+      "README.md",
+      "package.json"
+    ]
+  },
+
+  "acceptance_gate_engine": {
+    "owner": "SkyNetFactory gate runner",
+    "rule": "AgentSwarm worker/task completion is not sufficient for module completion. Module completion requires all final gates to pass. All gates are AND logic — every gate listed in the contract's acceptance_gates array must pass.",
+    "gates": {
+      "structure_validation": {
+        "pass_condition": "all required module output paths exist"
+      },
+      "contract_validation": {
+        "schema_ref": "skynetfactory://schemas/module-contract/v1.0",
+        "pass_condition": "module.contract.json is valid JSON and schema-compliant"
+      },
+      "sidecar_validation": {
+        "schema_ref": "skynetfactory://schemas/sidecar/v1.0",
+        "pass_condition": "module.sidecar.json is valid JSON and schema-compliant"
+      },
+      "unit_tests": {
+        "command": "npm test",
+        "working_directory": "C:\\SkynetFactory\\production-modules\\<module_id>",
+        "pass_condition": "exit_code == 0"
+      },
+      "contract_tests": {
+        "command": "npm run test:contract",
+        "working_directory": "C:\\SkynetFactory\\production-modules\\<module_id>",
+        "pass_condition": "exit_code == 0"
+      },
+      "docker_tests": {
+        "command": "docker compose -f docker-compose.test.yml up --build --abort-on-container-exit",
+        "working_directory": "C:\\SkynetFactory\\production-modules\\<module_id>",
+        "pass_condition": "exit_code == 0"
+      },
+      "write_scope_validation": {
+        "pass_condition": "all changed files are inside declared write_scope or allowed metadata paths"
+      },
+      "forbidden_behavior_validation": {
+        "pass_condition": "all forbidden_behaviors in contract are checked via their declared detection_method and none are violated",
+        "detection_methods": {
+          "write_scope_check": "Verify no writes outside scope",
+          "network_egress_check": "Verify no undeclared network calls via sandbox or proxy analysis",
+          "filesystem_mutation_diff": "Diff filesystem state before and after; flag undeclared mutations",
+          "static_analysis": "Run static analysis tools flagged in contract",
+          "runtime_sandbox_policy": "Run module in sandbox and enforce network/filesystem policies",
+          "manual_review": "Flag for human review (non-blocking gate — warn only)"
+        }
+      },
+      "registry_validation": {
+        "pass_condition": "verified registry entry can be written and read back"
+      }
+    },
+    "evidence_bundle": {
+      "path_template": "C:\\SkynetFactory\\logs\\evidence\\<module_id>\\<timestamp>",
+      "required_files": [
+        "contract.json",
+        "sidecar.json",
+        "worker_result.json",
+        "unit_test.log",
+        "contract_test.log",
+        "docker_test.log",
+        "gate_result.json",
+        "forbidden_behavior_check.log",
+        "git_diff.patch"
+      ]
+    },
+    "gate_result_schema": {
+      "type": "object",
+      "required": ["module_id", "overall_result", "individual_results", "timestamp"],
+      "properties": {
+        "module_id": { "type": "string" },
+        "overall_result": { "type": "string", "enum": ["pass", "fail"] },
+        "individual_results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["gate_name", "result", "details"],
+            "properties": {
+              "gate_name": { "type": "string" },
+              "result": { "type": "string", "enum": ["pass", "fail", "warn", "skip"] },
+              "details": { "type": "string" },
+              "duration_ms": { "type": "number" }
+            }
+          }
+        },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+
+  "registry": {
+    "path": "C:\\SkynetFactory\\registry",
+    "index_path": "C:\\SkynetFactory\\registry\\modules.json",
+    "strategy": "file_per_module_with_index",
+    "description": "Each verified module gets an individual JSON file under C:\\SkynetFactory\\registry\\<module_id>.json. The modules.json index file contains a summary array for fast lookup. Writes are atomic (write to temp, then rename). Index is rebuilt from individual files on startup and after each registration.",
+    "entry_schema_ref": "skynetfactory://schemas/registry-entry/v1.0",
+    "operations": [
+      "register(entry): write <module_id>.json, update index",
+      "lookup(module_id): read <module_id>.json",
+      "search(query): search index, return matching entries",
+      "deprecate(module_id, reason): update status to deprecated",
+      "supersede(old_module_id, new_module_id): update old status to superseded, register new"
+    ]
+  },
+
+  "electron_ui": {
+    "reuse_rule": "Reuse or embed AgentSwarm dashboard/progress plumbing if practical. Build custom Electron panels only for SkyNetFactory-specific module contract, sidecar, gate, and registry visibility.",
+    "location": "C:\\SkynetFactory\\ui\\electron-app",
+    "build_target": "Windows EXE",
+    "stack": {
+      "shell": "Electron",
+      "renderer": "React + TypeScript",
+      "bundler": "Vite",
+      "styling": "Tailwind CSS",
+      "packager": "electron-builder"
+    },
+    "ui_transport": {
+      "method": "websocket_and_rest",
+      "websocket_url": "ws://localhost:3013/skynetfactory/events",
+      "rest_base": "http://localhost:3013/skynetfactory/api",
+      "rest_endpoints": {
+        "contracts": "GET /contracts?state={state}",
+        "contract_detail": "GET /contracts/{module_id}",
+        "workers": "GET /workers",
+        "gates": "GET /gates/{module_id}",
+        "registry": "GET /registry",
+        "registry_detail": "GET /registry/{module_id}",
+        "logs": "GET /logs/{module_id}",
+        "evidence": "GET /evidence/{module_id}",
+        "config": "GET /config, PUT /config",
+        "health": "GET /health"
+      },
+      "file_watcher_paths": [
+        "C:\\SkynetFactory\\module-contracts\\*",
+        "C:\\SkynetFactory\\registry\\*.json"
+      ],
+      "reconnection": {
+        "initial_delay_ms": 1000,
+        "max_delay_ms": 30000,
+        "backoff_multiplier": 2
+      }
+    },
+    "required_views": {
+      "dashboard": [
+        "Total pending contracts",
+        "Active builds",
+        "Workers running",
+        "Testing modules",
+        "Completed modules",
+        "Rejected modules",
+        "Recent failures",
+        "System health indicators (Ollama, AgentSwarm)"
+      ],
+      "pipeline": [
+        "Pending",
+        "Claimed",
+        "Building",
+        "Testing",
+        "Completed",
+        "Remediation",
+        "Rejected"
+      ],
+      "module_detail_tabs": [
+        "Overview",
+        "Contract JSON",
+        "Sidecar JSON",
+        "AgentSwarm Task",
+        "Worker Logs",
+        "Gate Results",
+        "Docker Logs",
+        "File Tree",
+        "Diff",
+        "Remediation History",
+        "Evidence Bundle"
+      ],
+      "registry": [
+        "Search modules",
+        "Filter by category and tags",
+        "Open sidecar",
+        "Open contract",
+        "Open evidence bundle",
+        "View remediation history",
+        "Deprecate or supersede"
+      ],
+      "settings": [
+        "orchestration backend",
+        "AgentSwarm local path",
+        "AgentSwarm API base URL",
+        "AgentSwarm dashboard URL",
+        "Ollama URL",
+        "default model",
+        "fallback models",
+        "temperature",
+        "seed control",
+        "parallel workers",
+        "max retries",
+        "worker timeout",
+        "docker timeout",
+        "circuit breaker settings"
+      ]
+    },
+    "status_rule": "UI must distinguish implementation attempt complete from final module verified."
+  },
+
+  "configuration": {
+    "path": "C:\\SkynetFactory\\config\\builder.config.json",
+    "default": {
+      "orchestration_backend": "agent_swarm_reuse_first",
+      "agent_swarm_local_source_path": "C:\\Agent-Swarm_ref\\agent-swarm-main\\agent-swarm-main",
+      "agent_swarm_repo_path": "C:\\SkynetFactory\\orchestration\\agent-swarm",
+      "clone_agent_swarm_from_github": false,
+      "agent_swarm_api_base_url": "http://localhost:3013",
+      "agent_swarm_dashboard_url": "http://localhost:5274",
+      "ollama_host_url": "http://localhost:11434",
+      "ollama_container_url": "http://host.docker.internal:11434",
+      "default_ollama_model": "qwen3-coder",
+      "fallback_models": ["deepseek-coder", "glm", "kimi"],
+      "default_temperature": 0.1,
+      "seed_control": true,
+      "poll_interval_ms": 8000,
+      "max_retries": 3,
+      "max_remediation_attempts": 3,
+      "retry_backoff_base_ms": 15000,
+      "retry_backoff_multiplier": 2,
+      "retry_backoff_max_ms": 300000,
+      "circuit_breaker_trip_after": 5,
+      "circuit_breaker_reset_after_ms": 600000,
+      "worker_timeout_ms": 1800000,
+      "docker_timeout_ms": 600000,
+      "claimed_timeout_ms": 300000,
+      "building_timeout_ms": 1800000,
+      "testing_timeout_ms": 600000,
+      "parallel_workers": 2,
+      "reuse_agent_swarm_dashboard_when_possible": true,
+      "reuse_agent_swarm_docker_compose_when_possible": true,
+      "reuse_agent_swarm_task_queue_when_possible": true,
+      "build_new_orchestration_components_only_if_reuse_fails": true,
+      "health_check_interval_ms": 30000
+    }
+  },
+
+  "contract_versioning": {
+    "contract_self_version": "1.2.0",
+    "migration_strategy": "When this contract schema changes between versions, create a migration script at C:\\SkynetFactory\\config\\migrations\\<from_version>_to_<to_version>.js that can transform an older contract file into the new format. Log all migrations. Never silently alter contract data.",
+    "change_log": [
+      {
+        "version": "1.1.0",
+        "changes": "Initial structured contract (from prior unversioned state)"
+      },
+      {
+        "version": "1.2.0",
+        "changes": [
+          "Added concurrency_model with lockfile-based claim mechanism",
+          "Added rollback_policy with git worktree strategy",
+          "Added retry_policy with exponential backoff and circuit breaker",
+          "Added llm_determinism section with temperature/seed/fallback controls",
+          "Added health_checks with startup and runtime probes",
+          "Enriched contract_lifecycle with guard conditions, timeouts, and terminal state revival",
+          "Added forbidden_behavior_validation gate with detection methods",
+          "Promoted all inline schemas to proper JSON Schema (Draft 2020-12)",
+          "Added api_sub_schema with full endpoint and CLI command definitions",
+          "Added dependency_sub_schema with module_id, version_constraint, required_at, optional",
+          "Added worker_result_schema with evidence sub-object",
+          "Added registry_entry_schema",
+          "Added gate_result_schema to acceptance_gate_engine",
+          "Changed registry to file_per_module with atomic writes instead of single JSON file",
+          "Added ui_transport with REST endpoints, websocket events, file watcher, and reconnection",
+          "Added Remediation History tab and Evidence Bundle tab to UI views",
+          "Added circuit breaker settings to config defaults",
+          "Added state machine timeouts to config defaults",
+          "Added disallowed_patterns to ollama_worker_adapter",
+          "Added event_streaming to agent_swarm_integration (bidirectional)",
+          "Added streamTaskEvents and requestRemediationGuidance adapter functions",
+          "Added ambiguity_resolution to meta section",
+          "Added contract_versioning section with migration strategy",
+          "Added logs_decisions, logs_failed_attempts, claims_locks paths",
+          "Worker result evidence now includes model_used, prompt_hash, write_scope, files_written_log"
+        ]
+      }
+    ]
+  },
+
+  "execution_phases": [
+    {
+      "phase": 0,
+      "name": "Create root and copy local AgentSwarm",
+      "tasks": [
+        "Create C:/SkynetFactory folder structure including all paths in folder_structure_required",
+        "Verify local AgentSwarm source exists at C:/Agent-Swarm_ref/agent-swarm-main/agent-swarm-main",
+        "Copy or mirror local source into C:/SkynetFactory/orchestration/agent-swarm",
+        "Keep original reference copy untouched",
+        "Initialize git repo in C:/SkynetFactory if not already a repo"
+      ],
+      "acceptance": [
+        "All root folders exist",
+        "Working copy exists",
+        "Reference copy remains untouched",
+        "Git repo initialized"
+      ]
+    },
+    {
+      "phase": 1,
+      "name": "AgentSwarm reuse audit",
+      "tasks": [
+        "Inspect required AgentSwarm files and subsystems (see must_inspect_before_coding)",
+        "Create AGENT_SWARM_REUSE_INVENTORY.json using its defined schema",
+        "Classify all subsystems as reuse, wrap, extend, fork, or build_new",
+        "Identify AgentSwarm SQLite state layer, API server, websocket event system, and dashboard for reuse candidates"
+      ],
+      "acceptance": [
+        "Reuse inventory exists and validates against its schema",
+        "No orchestration subsystem is marked build_new if AgentSwarm has a reusable equivalent",
+        "Every must_inspect_before_coding item has been examined and classified"
+      ]
+    },
+    {
+      "phase": 2,
+      "name": "Contract authoring system and schema extraction",
+      "tasks": [
+        "Extract inline schemas from this contract to C:/SkynetFactory/module-contracts/_instructions/ as separate JSON Schema files",
+        "Create CONTRACT_AUTHORING_STANDARD.md",
+        "Create MODULE_CONTRACT_SCHEMA.json (extracted from this contract's module_contract_schema)",
+        "Create SIDECAR_SCHEMA.json (extracted from this contract's sidecar_schema)",
+        "Create WORKER_RESULT_SCHEMA.json (extracted from this contract's worker_result_schema)",
+        "Create REGISTRY_ENTRY_SCHEMA.json (extracted from this contract's registry_entry_schema)",
+        "Create QUALITY_BAR.md",
+        "Create NAMING_RULES.md",
+        "Create example storage.integrity_verifier.json"
+      ],
+      "acceptance": [
+        "All schemas parse as valid JSON Schema Draft 2020-12",
+        "Example contract validates against MODULE_CONTRACT_SCHEMA.json",
+        "Example sidecar validates against SIDECAR_SCHEMA.json",
+        "Instructions clearly tell Codex how to create contracts"
+      ]
+    },
+    {
+      "phase": 3,
+      "name": "AgentSwarm adapter, contract translator, and concurrency layer",
+      "tasks": [
+        "Implement contract watcher or reuse AgentSwarm task intake",
+        "Implement contract-to-AgentSwarm task translator",
+        "Implement task submission adapter",
+        "Implement AgentSwarm result normalizer",
+        "Implement worker_result.json writer",
+        "Implement atomic lockfile-based claim mechanism for concurrent contract processing",
+        "Implement state machine with guard conditions and timeouts",
+        "Implement event streaming from AgentSwarm (streamTaskEvents)",
+        "Implement remediation guidance channel (requestRemediationGuidance)"
+      ],
+      "acceptance": [
+        "Pending contract can become AgentSwarm task",
+        "AgentSwarm task completion produces normalized worker_result.json",
+        "Two concurrent claim attempts for same module_id result in exactly one winner and one rejected claim",
+        "State transitions enforce guard conditions and timeout handling",
+        "Events stream from AgentSwarm to supervisor"
+      ]
+    },
+    {
+      "phase": 4,
+      "name": "Ollama worker adapter with guardrails",
+      "tasks": [
+        "Adapt AgentSwarm worker to use local Ollama",
+        "Pass task_packet and module contract to worker",
+        "Enforce write_scope with path traversal prevention",
+        "Implement command allowlist enforcement with disallowed pattern blocking",
+        "Emit worker_result.json conforming to worker_result_schema",
+        "Log all writes and commands (path, size, SHA256, command, exit_code, duration)",
+        "Implement seed control and temperature configuration",
+        "Implement model fallback chain on consecutive gate failures",
+        "Implement network egress monitoring"
+      ],
+      "acceptance": [
+        "Ollama worker runs with low temperature and seed control",
+        "Worker can implement sample module",
+        "Worker cannot write outside scope",
+        "Worker cannot execute disallowed commands",
+        "Worker result includes full evidence object",
+        "Model fallback works when primary model fails gates"
+      ]
+    },
+    {
+      "phase": 5,
+      "name": "Acceptance gates, rollback, and registry",
+      "tasks": [
+        "Implement final gate runner with all gate types including forbidden_behavior_validation",
+        "Implement Docker test runner",
+        "Implement write-scope validator",
+        "Implement forbidden behavior validation using declared detection methods",
+        "Implement evidence bundle writer with all required files",
+        "Implement gate_result.json writer",
+        "Implement git worktree strategy for rollback",
+        "Implement rollback on remediation entry (clean slate from last build-start snapshot)",
+        "Implement failed attempt preservation in logs/failed_attempts/",
+        "Implement registry writer with file-per-module pattern and atomic writes",
+        "Implement registry index rebuild",
+        "Implement retry policy with exponential backoff and circuit breaker"
+      ],
+      "acceptance": [
+        "All gate types execute and produce gate_result.json",
+        "Passing module is registered with individual file and index",
+        "Failing module creates remediation entry with rollback",
+        "Failed attempt artifacts are preserved",
+        "Evidence bundle exists with all required files",
+        "Circuit breaker trips after consecutive failures",
+        "Registry supports lookup, search, deprecate, and supersede operations"
+      ]
+    },
+    {
+      "phase": 6,
+      "name": "UI, API backend, and progress visibility",
+      "tasks": [
+        "Implement REST API endpoints defined in ui_transport.rest_endpoints",
+        "Implement WebSocket event stream at ws://localhost:3013/skynetfactory/events",
+        "Reuse or embed AgentSwarm dashboard where practical",
+        "Add SkyNetFactory-specific module views including all required_views",
+        "Add system health indicators (Ollama, AgentSwarm) to dashboard",
+        "Add Remediation History and Evidence Bundle tabs to module detail",
+        "Show contract lifecycle with state indicators and timeout warnings",
+        "Build Windows EXE"
+      ],
+      "acceptance": [
+        "REST API endpoints respond correctly",
+        "WebSocket pushes live events on state changes",
+        "UI shows live progress and health indicators",
+        "UI distinguishes implementation complete from verified",
+        "UI can search registry and view evidence bundles",
+        "EXE builds"
+      ]
+    },
+    {
+      "phase": 7,
+      "name": "End-to-end sample and health validation",
+      "tasks": [
+        "Run startup health probes — verify Ollama and AgentSwarm are reachable",
+        "Place storage.integrity_verifier contract in pending",
+        "Run pipeline through AgentSwarm/Ollama",
+        "Run final gates including forbidden_behavior_validation",
+        "Register completed module in registry",
+        "Show it in UI",
+        "Trigger a deliberate failure to test remediation + rollback path",
+        "Verify circuit breaker activates on repeated failures",
+        "Test terminal state revival (submit v0.2.0 of rejected module)"
+      ],
+      "acceptance": [
+        "Health probes pass at startup",
+        "Sample contract reaches completed",
+        "Registry contains module with individual file + index entry",
+        "Evidence bundle exists with all required files",
+        "UI displays full lifecycle",
+        "Remediation path works with rollback",
+        "Circuit breaker trips and recovers correctly",
+        "Rejected module can be revived with new version"
+      ]
+    }
+  ],
+
+  "sample_module_contract": {
+    "module_id": "storage.integrity_verifier",
+    "version": "0.1.0",
+    "category": "storage",
+    "capability_type": "validator",
+    "purpose": "Verify copied artifacts against checksum manifests to detect data corruption or tampering in backup, deployment, and migration workflows.",
+    "reuse_scope": [
+      "backup verification systems",
+      "artifact deployment pipelines",
+      "data migration validation",
+      "disaster recovery checks"
+    ],
+    "language": "typescript",
+    "runtime": "node",
+    "api": {
+      "style": "http",
+      "base_path": "/api/v1",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/verify",
+          "input_schema": "VerifyRequest",
+          "output_schema": "VerifyResult",
+          "description": "Verify artifacts against checksum manifest."
+        },
+        {
+          "method": "GET",
+          "path": "/status/{task_id}",
+          "output_schema": "VerifyStatus",
+          "description": "Check status of a running verification task."
+        }
+      ],
+      "schemas": {
+        "VerifyRequest": {
+          "type": "object",
+          "required": ["manifest_path", "checksum_algorithm"],
+          "properties": {
+            "manifest_path": { "type": "string" },
+            "checksum_algorithm": { "type": "string", "enum": ["sha256", "sha512"] }
+          }
+        },
+        "VerifyResult": {
+          "type": "object",
+          "required": ["status", "checked_files", "failures"],
+          "properties": {
+            "status": { "type": "string", "enum": ["verified", "failed"] },
+            "checked_files": { "type": "integer" },
+            "failures": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "VerifyStatus": {
+          "type": "object",
+          "required": ["task_id", "state"],
+          "properties": {
+            "task_id": { "type": "string" },
+            "state": { "type": "string", "enum": ["running", "completed", "failed"] },
+            "progress_pct": { "type": "number" }
+          }
+        }
+      }
+    },
+    "dependencies": [],
+    "sidecar_requirements": {
+      "agent_usage": {
+        "when_to_use": "When you need to verify that files were copied or transferred without corruption. Ideal after backup operations, deployment pushes, or data migrations.",
+        "when_not_to_use": "When you need semantic content validation, format conversion verification, or comparison of file meaning rather than byte-level integrity."
+      },
+      "common_calls": [
+        {
+          "description": "Verify files against a manifest",
+          "method": "POST",
+          "path_or_command": "/api/v1/verify",
+          "input_example": { "manifest_path": "/data/manifest.json", "checksum_algorithm": "sha256" },
+          "output_example": { "status": "verified", "checked_files": 142, "failures": [] }
+        }
+      ],
+      "failure_modes": [
+        {
+          "condition": "Manifest file not found or unreadable",
+          "symptom": "400 error with descriptive message",
+          "recovery": "Ensure manifest path is correct and file is readable",
+          "severity": "permanent"
+        },
+        {
+          "condition": "Checksum algorithm not supported",
+          "symptom": "400 error listing supported algorithms",
+          "recovery": "Use sha256 or sha512",
+          "severity": "permanent"
+        },
+        {
+          "condition": "Source artifact missing",
+          "symptom": "failure entry in result listing missing file path",
+          "recovery": "Restore or re-provision the missing artifact",
+          "severity": "transient"
+        }
+      ],
+      "composition_tags": ["storage", "verification", "checksum", "integrity", "backup"]
+    },
+    "acceptance_gates": [
+      "structure_validation",
+      "contract_validation",
+      "sidecar_validation",
+      "unit_tests",
+      "contract_tests",
+      "docker_tests",
+      "write_scope_validation",
+      "forbidden_behavior_validation",
+      "registry_validation"
+    ],
+    "vm_test_requirements": {
+      "dockerfile_required": true,
+      "compose_required": true,
+      "must_exit_zero": true,
+      "extra_services": []
+    },
+    "forbidden_behaviors": [
+      {
+        "description": "Do not modify source artifacts being verified",
+        "detection_method": "filesystem_mutation_diff",
+        "severity": "critical"
+      },
+      {
+        "description": "Do not perform semantic content validation",
+        "detection_method": "static_analysis",
+        "severity": "high"
+      },
+      {
+        "description": "Do not require external network access",
+        "detection_method": "network_egress_check",
+        "severity": "high"
+      }
+    ],
+    "agent_notes": {
+      "implementation_hint": "Use Node crypto module to compute checksums. Keep API small and deterministic. Support streaming verification for large files.",
+      "known_gotchas": "Large manifests may cause memory pressure — consider streaming the manifest parse.",
+      "preferred_approach": "Streaming checksum computation with async generators",
+      "avoid_approach": "Loading entire files into memory before hashing"
+    }
+  },
+
+  "success_definition": [
+    "Codex can build the system by reading this JSON plus a minimal prompt",
+    "AgentSwarm local repo is reused instead of rebuilding orchestration",
+    "Module contracts can be authored consistently and validated against proper JSON Schema",
+    "A pending contract can become a verified registered module",
+    "Ollama workers can implement modules with low temperature and seed control",
+    "Final gates prevent false completion, including forbidden_behavior_validation",
+    "Concurrency is safe — only one worker per module_id at a time",
+    "Remediation includes rollback to clean state via git worktrees",
+    "Circuit breaker prevents runaway failures",
+    "UI shows module progress, health indicators, and final verification",
+    "Rejected modules can be revived with new versions",
+    "The system can continue generating reusable modules over time",
+    "All state transitions have timeouts and guard conditions — no stuck states",
+    "Evidence bundles provide full audit trail for every module attempt"
+  ]
+}

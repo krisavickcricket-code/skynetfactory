@@ -1,0 +1,16 @@
+{
+  "name": "skynetfactory-ollama-worker",
+  "version": "1.4.0",
+  "description": "SkyNetFactory Ollama worker - implements modules using local Ollama models",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/worker.ts",
+    "build": "tsc"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "tsx": "^4.19.0",
+    "@types/node": "^22.0.0"
+  }
+}

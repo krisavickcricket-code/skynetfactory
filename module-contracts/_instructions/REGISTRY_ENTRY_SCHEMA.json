@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "skynetfactory://schemas/registry-entry/v1.1",
+  "title": "SkyNetFactoryRegistryEntry",
+  "description": "A verified module entry in the SkyNetFactory registry.",
+  "type": "object",
+  "required": ["module_id","version","category","capability_type","path","contract_path","sidecar_path","status","contract_hash","created_at","updated_at","tags","acceptance_evidence_path"],
+  "properties": {
+    "module_id": { "type": "string", "pattern": "^[a-z0-9_]+\\.[a-z0-9_]+$" },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "category": { "type": "string" },
+    "capability_type": { "type": "string", "enum": ["validator","transformer","provider","gateway","harness","indexer","adapter","analyzer","generator"] },
+    "path": { "type": "string" },
+    "contract_path": { "type": "string" },
+    "sidecar_path": { "type": "string" },
+    "status": { "type": "string", "enum": ["verified","deprecated","superseded"] },
+    "contract_hash": { "type": "string" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "acceptance_evidence_path": { "type": "string" },
+    "agent_swarm_task_id": { "type": "string" },
+    "remediation_history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["attempt","reason"],
+        "properties": {
+          "attempt": { "type": "number" },
+          "remediated_at": { "type": "string", "format": "date-time" },
+          "reason": { "type": "string" },
+          "model_used": { "type": "string" }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

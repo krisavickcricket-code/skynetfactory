@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "skynetfactory://schemas/worker-result/v1.1",
+  "title": "SkyNetFactoryWorkerResult",
+  "description": "Structured output from an Ollama worker after implementing a module.",
+  "type": "object",
+  "required": ["task_id","module_id","status","changed_files","evidence"],
+  "properties": {
+    "task_id": { "type": "string" },
+    "module_id": { "type": "string" },
+    "status": { "type": "string", "enum": ["passed","failed","partial"] },
+    "changed_files": { "type": "array", "items": { "type": "string" } },
+    "tests_run": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["test_name","result"],
+        "properties": {
+          "test_name": { "type": "string" },
+          "result": { "type": "string", "enum": ["pass","fail","skip","error"] },
+          "duration_ms": { "type": "number" },
+          "output_snippet": { "type": "string" }
+        }
+      }
+    },
+    "docker_result": {
+      "type": "object",
+      "properties": {
+        "exit_code": { "type": "number" },
+        "output_snippet": { "type": "string" },
+        "containers_started": { "type": "number" }
+      }
+    },
+    "known_issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["description","severity"],
+        "properties": {
+          "description": { "type": "string" },
+          "severity": { "type": "string", "enum": ["critical","high","medium","low","info"] },
+          "suggested_fix": { "type": "string" }
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["model_used","prompt_hash","write_scope_declared"],
+      "properties": {
+        "model_used": { "type": "string" },
+        "model_version": { "type": "string" },
+        "temperature": { "type": "number" },
+        "seed": { "type": ["number","null"] },
+        "prompt_hash": { "type": "string" },
+        "write_scope_declared": { "type": "array", "items": { "type": "string" } },
+        "commands_executed": { "type": "array", "items": { "type": "string" } },
+        "files_written_log": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path","sha256"],
+            "properties": {
+              "path": { "type": "string" },
+              "size_bytes": { "type": "number" },
+              "sha256": { "type": "string" }
+            }
+          }
+        },
+        "duration_ms": { "type": "number" }
+      }
+    }
+  },
+  "additionalProperties": false
+}

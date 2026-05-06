@@ -1,0 +1,12 @@
+[
+  {
+    "module_id": "test.test_module",
+    "version": "0.1.0",
+    "category": "test",
+    "capability_type": "validator",
+    "status": "deprecated",
+    "tags": [
+      "test"
+    ]
+  }
+]
