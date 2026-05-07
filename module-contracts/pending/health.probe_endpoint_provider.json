@@ -1,0 +1,127 @@
+{
+  "module_id": "health.probe_endpoint_provider",
+  "version": "0.1.0",
+  "category": "operations",
+  "capability_type": "provider",
+  "purpose": "Expose startup, liveness, and readiness probe endpoints with dependency-aware checks and explicit degraded states for service deployment environments.",
+  "reuse_scope": [
+    "containerized API deployments",
+    "worker service readiness checks",
+    "staging environment verification",
+    "Kubernetes probe endpoints"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/health/live",
+        "output_schema": "ProbeResult",
+        "description": "Return container liveness status."
+      },
+      {
+        "method": "GET",
+        "path": "/health/ready",
+        "output_schema": "ProbeResult",
+        "description": "Return readiness status based on declared dependencies."
+      },
+      {
+        "method": "GET",
+        "path": "/health/startup",
+        "output_schema": "ProbeResult",
+        "description": "Return startup status while initialization is still in progress."
+      }
+    ],
+    "schemas": {
+      "ProbeResult": {
+        "type": "object",
+        "required": ["status", "checks"],
+        "properties": {
+          "status": { "type": "string", "enum": ["ok", "degraded", "fail", "starting"] },
+          "checks": { "type": "array", "items": { "type": "object" } }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "health.probe_endpoint_provider",
+    "version": "0.1.0",
+    "purpose": "Standard health probe endpoint provider for service deployments.",
+    "agent_usage": {
+      "when_to_use": "Use for services that need explicit startup, liveness, and readiness endpoints for orchestrators and operators.",
+      "when_not_to_use": "Do not use as a substitute for metrics, deep diagnostics, or business workflow completion checks.",
+      "example_workflow": "1) Define dependency checks. 2) Mount /health/live, /health/ready, and /health/startup. 3) Point deployment probes to the matching endpoints."
+    },
+    "common_calls": [
+      {
+        "description": "Read readiness endpoint",
+        "method": "GET",
+        "path_or_command": "/health/ready",
+        "input_example": {},
+        "output_example": { "status": "ok", "checks": [{ "name": "database", "status": "ok" }] }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Required dependency is unavailable",
+        "symptom": "readiness returns degraded or fail while liveness remains ok",
+        "recovery": "Restore the dependency and retry readiness checks",
+        "severity": "transient"
+      }
+    ],
+    "composition_tags": ["health", "readiness", "liveness", "startup", "operations"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Model probes separately: startup reflects initialization phase, liveness only checks process viability, readiness checks dependencies and returns 200 only when traffic can be served.",
+    "known_gotchas": "Using one endpoint for all probes can cause restart loops or traffic during warmup. Readiness should degrade without crashing the process.",
+    "preferred_approach": "Provide a probe registry where each check returns name, status, and detail, then map those to startup, liveness, or readiness responses.",
+    "avoid_approach": "Do not block liveness on optional dependencies and do not report ready before initialization completes."
+  },
+  "test_cases": [
+    {
+      "name": "startup endpoint reports starting before init complete",
+      "input": { "method": "GET", "path": "/health/startup" },
+      "expected_status": 200,
+      "expected_body": { "status": "starting" }
+    }
+  ]
+}

@@ -1,0 +1,134 @@
+{
+  "module_id": "integration.webhook_signature_verifier",
+  "version": "0.1.0",
+  "category": "integration",
+  "capability_type": "validator",
+  "purpose": "Verify signed webhook payloads using provider-specific HMAC rules before business logic processes incoming events.",
+  "reuse_scope": [
+    "billing webhook ingestion",
+    "Git hosting event handlers",
+    "automation callback endpoints",
+    "event-driven API integrations"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/webhooks/verify-signature",
+        "input_schema": "WebhookVerifyRequest",
+        "output_schema": "WebhookVerifyResult",
+        "description": "Verify a raw webhook body and signature header using a configured provider verification strategy."
+      }
+    ],
+    "schemas": {
+      "WebhookVerifyRequest": {
+        "type": "object",
+        "required": ["provider", "raw_body", "headers", "secret"],
+        "properties": {
+          "provider": { "type": "string", "enum": ["github", "stripe", "generic_hmac_sha256"] },
+          "raw_body": { "type": "string" },
+          "headers": { "type": "object" },
+          "secret": { "type": "string" },
+          "timestamp_tolerance_seconds": { "type": "integer" }
+        }
+      },
+      "WebhookVerifyResult": {
+        "type": "object",
+        "required": ["valid", "errors"],
+        "properties": {
+          "valid": { "type": "boolean" },
+          "errors": { "type": "array", "items": { "type": "string" } },
+          "provider_event_id": { "type": "string" }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "integration.webhook_signature_verifier",
+    "version": "0.1.0",
+    "purpose": "Incoming webhook signature verification for common HMAC-based providers.",
+    "agent_usage": {
+      "when_to_use": "Use at the very start of webhook handling, before parsing or acting on the event payload.",
+      "when_not_to_use": "Do not use for OAuth bearer token validation, mutual TLS, or post-verification event deduplication.",
+      "example_workflow": "1) Capture the raw request body exactly as received. 2) Call /webhooks/verify-signature with provider, headers, and secret. 3) Parse and process only when valid is true."
+    },
+    "common_calls": [
+      {
+        "description": "Verify a GitHub webhook delivery",
+        "method": "POST",
+        "path_or_command": "/api/v1/webhooks/verify-signature",
+        "input_example": { "provider": "github", "raw_body": "{\"action\":\"opened\"}", "headers": { "x-hub-signature-256": "sha256=..." }, "secret": "webhook-secret" },
+        "output_example": { "valid": true, "errors": [] }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Raw body was modified before verification",
+        "symptom": "valid false even though the sender secret is correct",
+        "recovery": "Verify against the exact raw UTF-8 payload before JSON parsing or proxy rewriting",
+        "severity": "permanent"
+      },
+      {
+        "condition": "Timestamp or signature is outside tolerance",
+        "symptom": "valid false with replay or signature mismatch error",
+        "recovery": "Use the correct secret and verify within the accepted replay window",
+        "severity": "transient"
+      }
+    ],
+    "composition_tags": ["webhook", "hmac", "integration", "security", "validator"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Use Node crypto createHmac and timingSafeEqual. Implement provider-specific header parsing for GitHub X-Hub-Signature-256 and Stripe-Signature style timestamped schemes. Treat raw_body as UTF-8 exactly as received.",
+    "known_gotchas": "Webhook frameworks often parse or reserialize JSON before verification, which breaks signatures. Constant-time comparison matters.",
+    "preferred_approach": "Keep provider verifiers small and explicit, returning structured verification errors instead of throwing.",
+    "avoid_approach": "Do not verify parsed JSON, do not strip whitespace, and do not accept missing signature headers."
+  },
+  "test_cases": [
+    {
+      "name": "missing signature header fails",
+      "input": { "method": "POST", "path": "/webhooks/verify-signature", "body": { "provider": "github", "raw_body": "{}", "headers": {}, "secret": "abc" } },
+      "expected_status": 200,
+      "expected_body": { "valid": false }
+    }
+  ]
+}

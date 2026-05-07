@@ -1,0 +1,143 @@
+{
+  "module_id": "api.openapi_manifest_provider",
+  "version": "0.1.0",
+  "category": "integration",
+  "capability_type": "provider",
+  "purpose": "Serve and validate a structured OpenAPI manifest so humans and agents can discover API capabilities without source inspection.",
+  "reuse_scope": [
+    "agent capability discovery",
+    "API documentation publishing",
+    "client generation workflows",
+    "staging environment verification"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/openapi/validate",
+        "input_schema": "OpenApiValidateRequest",
+        "output_schema": "OpenApiValidateResult",
+        "description": "Validate an OpenAPI document structure before publication."
+      },
+      {
+        "method": "GET",
+        "path": "/openapi/manifest",
+        "output_schema": "OpenApiManifestResult",
+        "description": "Return the current OpenAPI document or manifest metadata."
+      }
+    ],
+    "schemas": {
+      "OpenApiValidateRequest": {
+        "type": "object",
+        "required": ["document"],
+        "properties": {
+          "document": { "type": "object" }
+        }
+      },
+      "OpenApiValidateResult": {
+        "type": "object",
+        "required": ["valid", "errors"],
+        "properties": {
+          "valid": { "type": "boolean" },
+          "errors": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "OpenApiManifestResult": {
+        "type": "object",
+        "required": ["openapi"],
+        "properties": {
+          "openapi": { "type": "object" }
+        }
+      }
+    }
+  },
+  "dependencies": [
+    {
+      "module_id": "npm:@apidevtools/swagger-parser",
+      "version_constraint": "^12.0.0",
+      "purpose": "Validate OpenAPI documents and surface structural errors",
+      "required_at": "runtime"
+    }
+  ],
+  "sidecar_specification": {
+    "module_id": "api.openapi_manifest_provider",
+    "version": "0.1.0",
+    "purpose": "OpenAPI manifest serving and validation for API discoverability.",
+    "agent_usage": {
+      "when_to_use": "Use when an API should expose machine-readable capability metadata to clients, agents, and test harnesses.",
+      "when_not_to_use": "Do not use as a replacement for runtime auth, business validation, or network traffic inspection.",
+      "example_workflow": "1) Build an OpenAPI document. 2) POST it to /openapi/validate during CI. 3) Publish or serve it from /openapi/manifest when valid."
+    },
+    "common_calls": [
+      {
+        "description": "Validate a draft OpenAPI document",
+        "method": "POST",
+        "path_or_command": "/api/v1/openapi/validate",
+        "input_example": { "document": { "openapi": "3.1.0", "info": { "title": "API", "version": "1.0.0" }, "paths": {} } },
+        "output_example": { "valid": true, "errors": [] }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Document is structurally invalid or missing required OpenAPI fields",
+        "symptom": "valid false with parser errors",
+        "recovery": "Correct the document before publishing it to clients or agents",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["openapi", "manifest", "api", "documentation", "provider"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Use SwaggerParser.validate on the supplied document and return flattened error messages. Keep /openapi/manifest read-only and deterministic.",
+    "known_gotchas": "OpenAPI schemas can pass JSON Schema checks but still violate specification rules. Preserve the original document structure when serving it.",
+    "preferred_approach": "Separate validation from serving so CI and runtime can use the same module.",
+    "avoid_approach": "Do not generate manifests by inspecting live traffic and do not fetch remote references during validation."
+  },
+  "test_cases": [
+    {
+      "name": "minimal document validates",
+      "input": { "method": "POST", "path": "/openapi/validate", "body": { "document": { "openapi": "3.1.0", "info": { "title": "API", "version": "1.0.0" }, "paths": {} } } },
+      "expected_status": 200,
+      "expected_body": { "valid": true, "errors": [] }
+    }
+  ]
+}

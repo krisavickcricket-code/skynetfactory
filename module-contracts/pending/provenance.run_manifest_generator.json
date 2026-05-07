@@ -1,0 +1,129 @@
+{
+  "module_id": "provenance.run_manifest_generator",
+  "version": "0.1.0",
+  "category": "data",
+  "capability_type": "generator",
+  "purpose": "Generate deterministic run manifests describing inputs, parameters, tool versions, outputs, and timestamps for reproducible workflows.",
+  "reuse_scope": [
+    "research pipeline provenance",
+    "media generation audit trails",
+    "background job evidence bundles",
+    "data analytics run tracking"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/manifests/run",
+        "input_schema": "RunManifestRequest",
+        "output_schema": "RunManifestResult",
+        "description": "Generate a structured run manifest from declared workflow metadata."
+      }
+    ],
+    "schemas": {
+      "RunManifestRequest": {
+        "type": "object",
+        "required": ["run_id", "workflow_name", "inputs", "parameters", "outputs"],
+        "properties": {
+          "run_id": { "type": "string" },
+          "workflow_name": { "type": "string" },
+          "started_at": { "type": "string" },
+          "finished_at": { "type": "string" },
+          "inputs": { "type": "array", "items": { "type": "object" } },
+          "parameters": { "type": "object" },
+          "outputs": { "type": "array", "items": { "type": "object" } },
+          "tool_versions": { "type": "object" }
+        }
+      },
+      "RunManifestResult": {
+        "type": "object",
+        "required": ["manifest"],
+        "properties": {
+          "manifest": { "type": "object" }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "provenance.run_manifest_generator",
+    "version": "0.1.0",
+    "purpose": "Run provenance manifest generator for reproducible workflows.",
+    "agent_usage": {
+      "when_to_use": "Use at the end of a workflow or job to produce a consistent provenance record.",
+      "when_not_to_use": "Do not use as the storage layer itself or as a replacement for live status polling.",
+      "example_workflow": "1) Collect workflow metadata, inputs, outputs, and versions. 2) Call /manifests/run. 3) Persist the resulting manifest with the workflow evidence bundle."
+    },
+    "common_calls": [
+      {
+        "description": "Generate a run manifest",
+        "method": "POST",
+        "path_or_command": "/api/v1/manifests/run",
+        "input_example": { "run_id": "run-1", "workflow_name": "portrait-generation", "inputs": [], "parameters": { "style": "studio" }, "outputs": [] },
+        "output_example": { "manifest": { "run_id": "run-1", "workflow_name": "portrait-generation" } }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Required provenance fields are missing",
+        "symptom": "400 error listing missing run metadata",
+        "recovery": "Populate identifiers, timing, inputs, parameters, and outputs before generation",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["provenance", "manifest", "runs", "audit", "generator"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Build a canonical manifest object with stable key ordering, normalized ISO timestamps, and sorted input/output arrays when deterministic ordering is required by the caller.",
+    "known_gotchas": "Manifests become hard to diff if timestamps or object keys are normalized inconsistently. Provenance records should distinguish declared inputs from generated outputs.",
+    "preferred_approach": "Create a typed manifest schema and serialize it consistently for downstream audit and evidence tooling.",
+    "avoid_approach": "Do not infer missing provenance from ambient process state and do not mutate caller metadata silently."
+  },
+  "test_cases": [
+    {
+      "name": "generate minimal manifest",
+      "input": { "method": "POST", "path": "/manifests/run", "body": { "run_id": "r1", "workflow_name": "test-workflow", "inputs": [], "parameters": {}, "outputs": [] } },
+      "expected_status": 200,
+      "expected_body": { "manifest": { "run_id": "r1", "workflow_name": "test-workflow" } }
+    }
+  ]
+}

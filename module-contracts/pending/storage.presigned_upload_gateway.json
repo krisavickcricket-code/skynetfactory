@@ -1,0 +1,145 @@
+{
+  "module_id": "storage.presigned_upload_gateway",
+  "version": "0.1.0",
+  "category": "storage",
+  "capability_type": "gateway",
+  "purpose": "Issue presigned object upload instructions and validate upload policy inputs for large file workflows without proxying file bytes through the application.",
+  "reuse_scope": [
+    "media upload pipelines",
+    "research dataset ingestion",
+    "web application file uploads",
+    "mobile direct-to-storage uploads"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/uploads/presigned",
+        "input_schema": "PresignedUploadRequest",
+        "output_schema": "PresignedUploadResult",
+        "description": "Generate presigned upload instructions for one object using caller-approved storage settings."
+      }
+    ],
+    "schemas": {
+      "PresignedUploadRequest": {
+        "type": "object",
+        "required": ["bucket", "object_key", "content_type", "expires_in_seconds"],
+        "properties": {
+          "bucket": { "type": "string" },
+          "object_key": { "type": "string" },
+          "content_type": { "type": "string" },
+          "content_length": { "type": "integer" },
+          "expires_in_seconds": { "type": "integer" },
+          "metadata": { "type": "object" }
+        }
+      },
+      "PresignedUploadResult": {
+        "type": "object",
+        "required": ["method", "url", "headers", "expires_at"],
+        "properties": {
+          "method": { "type": "string", "enum": ["PUT", "POST"] },
+          "url": { "type": "string" },
+          "headers": { "type": "object" },
+          "fields": { "type": "object" },
+          "expires_at": { "type": "string" }
+        }
+      }
+    }
+  },
+  "dependencies": [
+    {
+      "module_id": "npm:@aws-sdk/client-s3",
+      "version_constraint": "^3.750.0",
+      "purpose": "Represent S3-compatible upload commands and request parameters",
+      "required_at": "runtime"
+    },
+    {
+      "module_id": "npm:@aws-sdk/s3-request-presigner",
+      "version_constraint": "^3.750.0",
+      "purpose": "Generate S3-compatible presigned upload URLs",
+      "required_at": "runtime"
+    }
+  ],
+  "sidecar_specification": {
+    "module_id": "storage.presigned_upload_gateway",
+    "version": "0.1.0",
+    "purpose": "Direct-to-object-storage presigned upload instruction generator.",
+    "agent_usage": {
+      "when_to_use": "Use when the application should let clients upload directly to object storage with short-lived credentials.",
+      "when_not_to_use": "Do not use for permanent credentials, upload byte proxying, or unrestricted bucket-wide write access.",
+      "example_workflow": "1) Validate caller ownership and object key policy. 2) Call /uploads/presigned. 3) Client uploads directly to storage using returned method, url, and headers."
+    },
+    "common_calls": [
+      {
+        "description": "Issue a presigned PUT upload",
+        "method": "POST",
+        "path_or_command": "/api/v1/uploads/presigned",
+        "input_example": { "bucket": "assets-prod", "object_key": "users/u1/input.png", "content_type": "image/png", "expires_in_seconds": 900 },
+        "output_example": { "method": "PUT", "url": "https://bucket.s3.amazonaws.com/...", "headers": { "content-type": "image/png" }, "expires_at": "2026-05-07T18:00:00Z" }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Requested object key or expiry violates platform policy",
+        "symptom": "400 error with policy violation details",
+        "recovery": "Use an allowed object key prefix and expiration window",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["storage", "upload", "presigned-url", "s3", "gateway"]
+  },
+  "network_requirements": {
+    "requires_network": true,
+    "allowed_hosts": [
+      { "host": "s3.amazonaws.com", "port": 443, "protocol": "https", "purpose": "Generate and validate S3-compatible request shapes" }
+    ],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not grant upload access outside approved object key scope",
+      "detection_method": "manual_review",
+      "severity": "critical"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Use S3Client with getSignedUrl and PutObjectCommand. Enforce a maximum expiration and approved key prefix policy before signing. Return only the minimum headers required by the signed request.",
+    "known_gotchas": "Presigned URLs inherit the permissions of the signing credentials. Expiry windows that are too long widen the blast radius of leaked URLs.",
+    "preferred_approach": "Treat signing as a narrow boundary module with explicit bucket and key policy checks before URL generation.",
+    "avoid_approach": "Do not proxy upload bytes through the API and do not return raw cloud credentials."
+  },
+  "test_cases": [
+    {
+      "name": "reject excessive expiration",
+      "input": { "method": "POST", "path": "/uploads/presigned", "body": { "bucket": "test", "object_key": "users/u1/a.txt", "content_type": "text/plain", "expires_in_seconds": 86400 } },
+      "expected_status": 400
+    }
+  ]
+}

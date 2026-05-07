@@ -1,0 +1,118 @@
+{
+  "module_id": "agent.capability_manifest_provider",
+  "version": "0.1.0",
+  "category": "integration",
+  "capability_type": "provider",
+  "purpose": "Publish a structured capability manifest for external agents describing available tools, prompts, workflows, auth requirements, and write scopes.",
+  "reuse_scope": [
+    "agent-facing REST APIs",
+    "MCP bridge discovery",
+    "platform capability catalogs",
+    "internal tooling self-description"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/agent/capabilities",
+        "output_schema": "CapabilityManifestResult",
+        "description": "Return a machine-readable capability manifest for authenticated or public agents."
+      }
+    ],
+    "schemas": {
+      "CapabilityManifestResult": {
+        "type": "object",
+        "required": ["platform", "version", "tools"],
+        "properties": {
+          "platform": { "type": "string" },
+          "version": { "type": "string" },
+          "tools": { "type": "array", "items": { "type": "object" } },
+          "prompts": { "type": "array", "items": { "type": "object" } },
+          "workflows": { "type": "array", "items": { "type": "object" } }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "agent.capability_manifest_provider",
+    "version": "0.1.0",
+    "purpose": "Machine-readable capability manifest provider for external agents.",
+    "agent_usage": {
+      "when_to_use": "Use when a platform should tell external agents what tools and workflows exist before they make calls.",
+      "when_not_to_use": "Do not use as the execution layer itself or as a substitute for fine-grained authorization checks on actual tool calls.",
+      "example_workflow": "1) Client fetches /agent/capabilities. 2) It selects tools and prompts based on the manifest. 3) It calls the corresponding execution endpoints with the required auth."
+    },
+    "common_calls": [
+      {
+        "description": "Read capability manifest",
+        "method": "GET",
+        "path_or_command": "/api/v1/agent/capabilities",
+        "input_example": {},
+        "output_example": { "platform": "example", "version": "1.0.0", "tools": [{ "name": "search" }] }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Manifest drifts from real runtime capabilities",
+        "symptom": "Agents discover tools that are missing or call signatures that are wrong",
+        "recovery": "Generate the manifest from the same source of truth used to mount tools and workflows",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["agent", "manifest", "capabilities", "mcp", "provider"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Model manifest entries with stable ids, human descriptions, auth requirements, input shapes, and write scopes. Generate from a typed registry rather than handwritten string blobs.",
+    "known_gotchas": "Capability manifests become stale quickly if they are edited separately from route and tool definitions. Public and authenticated visibility can differ by tool.",
+    "preferred_approach": "Keep the manifest read-only and derive it from the runtime capability registry.",
+    "avoid_approach": "Do not hardcode capabilities in multiple places and do not expose secret configuration in manifest output."
+  },
+  "test_cases": [
+    {
+      "name": "manifest returns tool array",
+      "input": { "method": "GET", "path": "/agent/capabilities" },
+      "expected_status": 200,
+      "expected_body": { "tools": [] }
+    }
+  ]
+}

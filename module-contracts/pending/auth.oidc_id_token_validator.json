@@ -1,0 +1,147 @@
+{
+  "module_id": "auth.oidc_id_token_validator",
+  "version": "0.1.0",
+  "category": "security",
+  "capability_type": "validator",
+  "purpose": "Validate OpenID Connect ID tokens against caller-supplied issuer metadata and key material without performing remote discovery.",
+  "reuse_scope": [
+    "web application login flows",
+    "mobile backend identity checks",
+    "agent bearer token validation",
+    "integration test auth stubs"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/oidc/id-token/validate",
+        "input_schema": "OidcValidateRequest",
+        "output_schema": "OidcValidateResult",
+        "description": "Validate an OIDC ID token with explicit issuer, audience, nonce, and key inputs."
+      }
+    ],
+    "schemas": {
+      "OidcValidateRequest": {
+        "type": "object",
+        "required": ["id_token", "issuer", "audience", "jwks"],
+        "properties": {
+          "id_token": { "type": "string" },
+          "issuer": { "type": "string" },
+          "audience": { "type": "string" },
+          "nonce": { "type": "string" },
+          "jwks": { "type": "object" },
+          "clock_tolerance_seconds": { "type": "integer" }
+        }
+      },
+      "OidcValidateResult": {
+        "type": "object",
+        "required": ["valid", "claims", "errors"],
+        "properties": {
+          "valid": { "type": "boolean" },
+          "claims": { "type": "object" },
+          "errors": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  },
+  "dependencies": [
+    {
+      "module_id": "npm:jose",
+      "version_constraint": "^5.9.0",
+      "purpose": "Standards-compliant JWT and JWK verification for OIDC ID tokens",
+      "required_at": "runtime"
+    }
+  ],
+  "sidecar_specification": {
+    "module_id": "auth.oidc_id_token_validator",
+    "version": "0.1.0",
+    "purpose": "Local OpenID Connect ID token validation with explicit trust inputs.",
+    "agent_usage": {
+      "when_to_use": "Use when a login or bearer flow already has issuer metadata and JWK material available and needs local ID token validation.",
+      "when_not_to_use": "Do not use for remote discovery, authorization code exchange, session management, or access token introspection.",
+      "example_workflow": "1) Load trusted issuer, audience, and JWKS from config. 2) Call /oidc/id-token/validate with the token. 3) Use claims only when valid is true."
+    },
+    "common_calls": [
+      {
+        "description": "Validate an ID token from a configured provider",
+        "method": "POST",
+        "path_or_command": "/api/v1/oidc/id-token/validate",
+        "input_example": { "id_token": "eyJ...", "issuer": "https://issuer.example", "audience": "web-client", "jwks": { "keys": [] } },
+        "output_example": { "valid": true, "claims": { "iss": "https://issuer.example", "aud": "web-client", "sub": "user-1" }, "errors": [] }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Issuer, audience, nonce, or expiry claims do not validate",
+        "symptom": "200 response with valid false and claim errors",
+        "recovery": "Use trusted inputs that match the issued ID token",
+        "severity": "permanent"
+      },
+      {
+        "condition": "No matching signing key exists in supplied JWKS",
+        "symptom": "200 response with valid false and key lookup error",
+        "recovery": "Refresh trusted JWKS outside this module and retry",
+        "severity": "transient"
+      }
+    ],
+    "composition_tags": ["auth", "oidc", "identity", "jwt", "validator"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    },
+    {
+      "description": "Must not trust token claims before signature verification",
+      "detection_method": "manual_review",
+      "severity": "critical"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Use jose jwtVerify with a JWKS created from the supplied jwks object. Enforce issuer and audience, validate nonce when provided, and reject unsigned or unsupported algorithms.",
+    "known_gotchas": "OIDC ID tokens require claim checks beyond plain JWT verification, especially issuer, audience, nonce, and expiry. Access tokens are not interchangeable with ID tokens.",
+    "preferred_approach": "Keep verification local and deterministic by requiring all trust material in the request or configuration boundary.",
+    "avoid_approach": "Do not perform remote OIDC discovery or JWKS fetches inside this module."
+  },
+  "test_cases": [
+    {
+      "name": "reject audience mismatch",
+      "input": { "method": "POST", "path": "/oidc/id-token/validate", "body": { "id_token": "generated-test-token", "issuer": "https://issuer.example", "audience": "wrong-client", "jwks": { "keys": [] } } },
+      "expected_status": 200,
+      "expected_body": { "valid": false }
+    }
+  ]
+}

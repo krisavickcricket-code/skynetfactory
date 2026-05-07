@@ -1,0 +1,191 @@
+{
+  "module_id": "orchestration.job_queue_gateway",
+  "version": "0.1.0",
+  "category": "processing",
+  "capability_type": "gateway",
+  "purpose": "Submit, inspect, retry, and cancel background jobs through a queue-backed orchestration boundary with explicit state tracking.",
+  "reuse_scope": [
+    "analysis job orchestration",
+    "media generation pipelines",
+    "data processing backlogs",
+    "worker-backed API operations"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/jobs",
+        "input_schema": "CreateJobRequest",
+        "output_schema": "CreateJobResult",
+        "description": "Submit one job into a named queue."
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}",
+        "output_schema": "JobStatusResult",
+        "description": "Retrieve current job state, attempts, and timestamps."
+      },
+      {
+        "method": "POST",
+        "path": "/jobs/{job_id}/retry",
+        "output_schema": "RetryJobResult",
+        "description": "Retry a previously failed job."
+      },
+      {
+        "method": "POST",
+        "path": "/jobs/{job_id}/cancel",
+        "output_schema": "CancelJobResult",
+        "description": "Cancel a waiting or delayed job when cancellation is allowed."
+      }
+    ],
+    "schemas": {
+      "CreateJobRequest": {
+        "type": "object",
+        "required": ["queue", "name", "payload"],
+        "properties": {
+          "queue": { "type": "string" },
+          "name": { "type": "string" },
+          "payload": { "type": "object" },
+          "attempts": { "type": "integer" },
+          "backoff_ms": { "type": "integer" }
+        }
+      },
+      "CreateJobResult": {
+        "type": "object",
+        "required": ["job_id", "state"],
+        "properties": {
+          "job_id": { "type": "string" },
+          "state": { "type": "string" }
+        }
+      },
+      "JobStatusResult": {
+        "type": "object",
+        "required": ["job_id", "state"],
+        "properties": {
+          "job_id": { "type": "string" },
+          "state": { "type": "string", "enum": ["waiting", "active", "completed", "failed", "delayed", "cancelled"] },
+          "attempts_made": { "type": "integer" }
+        }
+      },
+      "RetryJobResult": {
+        "type": "object",
+        "required": ["job_id", "retried"],
+        "properties": {
+          "job_id": { "type": "string" },
+          "retried": { "type": "boolean" }
+        }
+      },
+      "CancelJobResult": {
+        "type": "object",
+        "required": ["job_id", "cancelled"],
+        "properties": {
+          "job_id": { "type": "string" },
+          "cancelled": { "type": "boolean" }
+        }
+      }
+    }
+  },
+  "dependencies": [
+    {
+      "module_id": "npm:bullmq",
+      "version_constraint": "^5.56.0",
+      "purpose": "Queue-backed job lifecycle management with retries, delays, and inspection",
+      "required_at": "runtime"
+    }
+  ],
+  "sidecar_specification": {
+    "module_id": "orchestration.job_queue_gateway",
+    "version": "0.1.0",
+    "purpose": "Queue-backed background job orchestration boundary.",
+    "agent_usage": {
+      "when_to_use": "Use when a workflow should return quickly and continue processing in background workers with explicit job states.",
+      "when_not_to_use": "Do not use for synchronous request handling, durable workflow definitions, or direct shell execution without queue state tracking.",
+      "example_workflow": "1) POST /jobs with queue, name, and payload. 2) Poll GET /jobs/{job_id}. 3) Retry or cancel using explicit job endpoints when needed."
+    },
+    "common_calls": [
+      {
+        "description": "Submit an image generation job",
+        "method": "POST",
+        "path_or_command": "/api/v1/jobs",
+        "input_example": { "queue": "generation", "name": "render-portrait", "payload": { "session_id": "s1" }, "attempts": 3, "backoff_ms": 5000 },
+        "output_example": { "job_id": "job-123", "state": "waiting" }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Queue backend is unavailable",
+        "symptom": "503 error on job submission or status retrieval",
+        "recovery": "Restore queue connectivity and retry submission",
+        "severity": "transient"
+      },
+      {
+        "condition": "Retry requested for a non-failed job",
+        "symptom": "400 error indicating current state",
+        "recovery": "Only retry jobs currently in the failed state",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["queue", "jobs", "workers", "background", "gateway"]
+  },
+  "network_requirements": {
+    "requires_network": true,
+    "allowed_hosts": [
+      { "host": "localhost", "port": 6379, "protocol": "tcp", "purpose": "Queue backend for BullMQ state and scheduling" }
+    ],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": [
+      {
+        "name": "redis",
+        "image": "redis:7-alpine",
+        "env": {}
+      }
+    ]
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not enqueue jobs without explicit state tracking",
+      "detection_method": "manual_review",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Use BullMQ Queue, Job, and QueueEvents primitives. Expose only submission and state APIs here; worker execution belongs in a separate module. Enforce maximum attempts and safe backoff bounds.",
+    "known_gotchas": "Retries, delayed jobs, and rate limiting need a scheduler-aware BullMQ setup. Queue state can become confusing if cancellation is treated as deletion rather than explicit cancellation metadata.",
+    "preferred_approach": "Keep this module focused on queue lifecycle operations and represent state transitions explicitly in API responses.",
+    "avoid_approach": "Do not execute jobs inline in the API process and do not hide failed job reasons."
+  },
+  "test_cases": [
+    {
+      "name": "submit job returns waiting state",
+      "input": { "method": "POST", "path": "/jobs", "body": { "queue": "default", "name": "task-a", "payload": { "x": 1 } } },
+      "expected_status": 200,
+      "expected_body": { "state": "waiting" }
+    }
+  ]
+}
