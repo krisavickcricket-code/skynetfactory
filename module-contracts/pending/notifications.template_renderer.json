@@ -1,0 +1,123 @@
+{
+  "module_id": "notifications.template_renderer",
+  "version": "0.1.0",
+  "category": "notifications",
+  "capability_type": "generator",
+  "purpose": "Render notification templates with typed variables so email, push, or inbox delivery modules can reuse consistent message bodies without embedding string formatting logic everywhere.",
+  "reuse_scope": [
+    "transactional email systems",
+    "workflow status notifications",
+    "multi-channel messaging layers",
+    "localized template catalogs"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/notifications/render",
+        "input_schema": "NotificationRenderRequest",
+        "output_schema": "NotificationRenderResult",
+        "description": "Render a notification template using provided variables."
+      }
+    ],
+    "schemas": {
+      "NotificationRenderRequest": {
+        "type": "object",
+        "required": ["template_key", "variables"],
+        "properties": {
+          "template_key": { "type": "string" },
+          "variables": { "type": "object" }
+        }
+      },
+      "NotificationRenderResult": {
+        "type": "object",
+        "required": ["subject", "body"],
+        "properties": {
+          "subject": { "type": "string" },
+          "body": { "type": "string" }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "notifications.template_renderer",
+    "version": "0.1.0",
+    "purpose": "Render reusable notification templates from a catalog and variable payload.",
+    "agent_usage": {
+      "when_to_use": "Use before delivery modules send email, push, inbox, or webhook-style human-facing notifications.",
+      "when_not_to_use": "Do not use as the delivery transport, subscription preference engine, or marketing campaign scheduler.",
+      "example_workflow": "1) Select a template key. 2) Call /notifications/render with variables. 3) Hand the rendered subject and body to a delivery module."
+    },
+    "common_calls": [
+      {
+        "description": "Render a payment receipt template",
+        "method": "POST",
+        "path_or_command": "/api/v1/notifications/render",
+        "input_example": { "template_key": "payment_receipt", "variables": { "amount": "$19.00", "user_name": "Kris" } },
+        "output_example": { "subject": "Your receipt", "body": "Hi Kris, we received $19.00." }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Template key is missing or required variables are absent",
+        "symptom": "Rendering rejection with a missing template or variable reason",
+        "recovery": "Provide a valid template key and complete variable set before retrying",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["notifications", "templates", "rendering", "email", "generator"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Store a template catalog keyed by name, validate required variables, and render subject and body strings from a deterministic interpolation layer.",
+    "known_gotchas": "Renderers get brittle when templates rely on undeclared variables or custom inline logic, so prefer explicit variable declarations and simple interpolation.",
+    "preferred_approach": "Separate rendering from delivery so the same templates can power email, in-app, and test previews.",
+    "avoid_approach": "Do not send messages, fetch remote template content, or embed business-state lookups in the renderer."
+  },
+  "test_cases": [
+    {
+      "name": "reject missing required variable",
+      "input": { "method": "POST", "path": "/notifications/render", "body": { "template_key": "payment_receipt", "variables": {} } },
+      "expected_status": 400
+    }
+  ]
+}

@@ -1,0 +1,127 @@
+{
+  "module_id": "audit.decision_log_writer",
+  "version": "0.1.0",
+  "category": "compliance",
+  "capability_type": "provider",
+  "purpose": "Write structured decision records for gates, policy checks, and workflow approvals so later review can explain why a system allowed, denied, or rerouted behavior.",
+  "reuse_scope": [
+    "policy engines",
+    "workflow audit trails",
+    "security review pipelines",
+    "regulated decision surfaces"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/audit/decisions",
+        "input_schema": "DecisionLogRequest",
+        "output_schema": "DecisionLogResult",
+        "description": "Persist a structured decision record with actor, policy, result, and evidence fields."
+      }
+    ],
+    "schemas": {
+      "DecisionLogRequest": {
+        "type": "object",
+        "required": ["decision_type", "decision_result", "recorded_at"],
+        "properties": {
+          "decision_type": { "type": "string" },
+          "decision_result": { "type": "string" },
+          "recorded_at": { "type": "string" },
+          "actor_id": { "type": "string" },
+          "evidence": { "type": "object" }
+        }
+      },
+      "DecisionLogResult": {
+        "type": "object",
+        "required": ["log_id", "status"],
+        "properties": {
+          "log_id": { "type": "string" },
+          "status": { "type": "string", "enum": ["written"] }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "audit.decision_log_writer",
+    "version": "0.1.0",
+    "purpose": "Persist structured decision logs for policy and workflow review.",
+    "agent_usage": {
+      "when_to_use": "Use after a meaningful allow, deny, gate, reroute, or approval decision has been computed and should be reviewable later.",
+      "when_not_to_use": "Do not use as a general-purpose application logger, metrics sink, or high-volume debug stream.",
+      "example_workflow": "1) Compute a decision. 2) Call /audit/decisions with decision metadata. 3) Store the returned log id alongside the business object if needed."
+    },
+    "common_calls": [
+      {
+        "description": "Write a policy denial record",
+        "method": "POST",
+        "path_or_command": "/api/v1/audit/decisions",
+        "input_example": { "decision_type": "tool_authorization", "decision_result": "denied", "recorded_at": "2026-05-07T18:35:00Z", "actor_id": "researcher", "evidence": { "tool": "filesystem_write" } },
+        "output_example": { "log_id": "dec_123", "status": "written" }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Decision record is missing core metadata or contains unserializable evidence",
+        "symptom": "400 write rejection",
+        "recovery": "Normalize the evidence payload and provide required decision metadata before retrying",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["audit", "decisions", "policy", "review", "provider"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Accept a typed decision envelope, normalize any evidence payload to JSON-safe form, and persist immutable log entries with generated ids.",
+    "known_gotchas": "Audit records lose value when timestamps or decision types are free-form and inconsistent across callers, so centralize field naming and required metadata.",
+    "preferred_approach": "Write append-only records and treat updates or redactions as separate audit events when needed.",
+    "avoid_approach": "Do not reuse debug logging infrastructure as the decision audit layer."
+  },
+  "test_cases": [
+    {
+      "name": "write denial decision record",
+      "input": { "method": "POST", "path": "/audit/decisions", "body": { "decision_type": "tool_authorization", "decision_result": "denied", "recorded_at": "2026-05-07T18:35:00Z" } },
+      "expected_status": 200,
+      "expected_body": { "status": "written" }
+    }
+  ]
+}

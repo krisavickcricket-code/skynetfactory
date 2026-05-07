@@ -1,0 +1,125 @@
+{
+  "module_id": "security.resource_ownership_guard",
+  "version": "0.1.0",
+  "category": "security",
+  "capability_type": "validator",
+  "purpose": "Determine whether a caller owns or is permitted to access a specific resource so APIs can reject cross-user or cross-tenant access before reading or mutating protected data.",
+  "reuse_scope": [
+    "multi-tenant APIs",
+    "user-scoped media systems",
+    "artifact download surfaces",
+    "admin and self-service boundaries"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/security/ownership/check",
+        "input_schema": "OwnershipRequest",
+        "output_schema": "OwnershipResult",
+        "description": "Check whether a principal may access a resource based on ownership or delegated rights."
+      }
+    ],
+    "schemas": {
+      "OwnershipRequest": {
+        "type": "object",
+        "required": ["principal_id", "resource_owner_id"],
+        "properties": {
+          "principal_id": { "type": "string" },
+          "resource_owner_id": { "type": "string" },
+          "principal_roles": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "OwnershipResult": {
+        "type": "object",
+        "required": ["allowed"],
+        "properties": {
+          "allowed": { "type": "boolean" },
+          "reason": { "type": "string" }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "security.resource_ownership_guard",
+    "version": "0.1.0",
+    "purpose": "Guard resource access using ownership and delegated authorization rules.",
+    "agent_usage": {
+      "when_to_use": "Use before serving or mutating a resource that should only be visible to its owner or a privileged role.",
+      "when_not_to_use": "Do not use as a full policy engine, identity provider, or role assignment service.",
+      "example_workflow": "1) Resolve the resource owner. 2) Call /security/ownership/check with principal and owner information. 3) Continue only when allowed is true."
+    },
+    "common_calls": [
+      {
+        "description": "Check whether a user owns a generation",
+        "method": "POST",
+        "path_or_command": "/api/v1/security/ownership/check",
+        "input_example": { "principal_id": "user_1", "resource_owner_id": "user_2", "principal_roles": ["user"] },
+        "output_example": { "allowed": false, "reason": "owner_mismatch" }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Principal does not match the resource owner and lacks any overriding role",
+        "symptom": "Access denied with an owner mismatch reason",
+        "recovery": "Authenticate as the correct owner or use a role explicitly allowed by policy",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["security", "ownership", "access", "tenancy", "validator"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Accept resolved owner identifiers and optional role overrides, then return explicit allow or deny reasons such as owner_match, admin_override, or owner_mismatch.",
+    "known_gotchas": "Ownership checks are often duplicated ad hoc in handlers; centralizing them avoids inconsistent cross-resource security behavior.",
+    "preferred_approach": "Keep ownership validation pure and feed it already-resolved identity and resource metadata.",
+    "avoid_approach": "Do not fetch arbitrary resources or perform authentication handshakes inside the guard."
+  },
+  "test_cases": [
+    {
+      "name": "deny non-owner user",
+      "input": { "method": "POST", "path": "/security/ownership/check", "body": { "principal_id": "user_1", "resource_owner_id": "user_2", "principal_roles": ["user"] } },
+      "expected_status": 200,
+      "expected_body": { "allowed": false, "reason": "owner_mismatch" }
+    }
+  ]
+}

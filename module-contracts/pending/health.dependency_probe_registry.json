@@ -1,0 +1,123 @@
+{
+  "module_id": "health.dependency_probe_registry",
+  "version": "0.1.0",
+  "category": "health",
+  "capability_type": "provider",
+  "purpose": "Register and evaluate named dependency probes so readiness and diagnostics surfaces can report which backing services are healthy, degraded, or unavailable.",
+  "reuse_scope": [
+    "service readiness endpoints",
+    "worker dependency diagnostics",
+    "orchestration control planes",
+    "multi-dependency health dashboards"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/health/dependencies",
+        "output_schema": "DependencyProbeResult",
+        "description": "Return the current status of all registered dependency probes."
+      }
+    ],
+    "schemas": {
+      "DependencyProbeResult": {
+        "type": "object",
+        "required": ["dependencies"],
+        "properties": {
+          "dependencies": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "status"],
+              "properties": {
+                "name": { "type": "string" },
+                "status": { "type": "string", "enum": ["healthy", "degraded", "unavailable"] },
+                "reason": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "health.dependency_probe_registry",
+    "version": "0.1.0",
+    "purpose": "Expose the state of registered dependency probes for readiness and diagnostics.",
+    "agent_usage": {
+      "when_to_use": "Use when a service depends on several internal or local subsystems and callers need a consolidated dependency health view.",
+      "when_not_to_use": "Do not use as a long-running remote monitor, alerting platform, or deployment orchestrator.",
+      "example_workflow": "1) Register dependency probe functions. 2) Call /health/dependencies. 3) Use the returned statuses in readiness or diagnostics responses."
+    },
+    "common_calls": [
+      {
+        "description": "List current dependency probe states",
+        "method": "GET",
+        "path_or_command": "/api/v1/health/dependencies",
+        "output_example": { "dependencies": [{ "name": "sqlite", "status": "healthy" }, { "name": "queue", "status": "degraded", "reason": "slow response" }] }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Probe function throws or times out",
+        "symptom": "Dependency status marked degraded or unavailable with a reason",
+        "recovery": "Repair the dependency or adjust the probe implementation to return deterministic status data",
+        "severity": "transient"
+      }
+    ],
+    "composition_tags": ["health", "dependencies", "readiness", "diagnostics", "provider"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Store named probe callbacks or adapters in a registry, execute them with bounded timing, and normalize their results into healthy, degraded, or unavailable states.",
+    "known_gotchas": "Health endpoints become misleading when one slow probe blocks all others, so isolate probe execution and preserve partial results.",
+    "preferred_approach": "Return per-dependency status objects with names and reasons rather than one opaque aggregate boolean.",
+    "avoid_approach": "Do not hide probe failures behind a blanket healthy response."
+  },
+  "test_cases": [
+    {
+      "name": "surface degraded dependency",
+      "input": { "method": "GET", "path": "/health/dependencies" },
+      "expected_status": 200
+    }
+  ]
+}

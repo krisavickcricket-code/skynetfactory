@@ -1,0 +1,127 @@
+{
+  "module_id": "config.feature_flag_evaluator",
+  "version": "0.1.0",
+  "category": "config",
+  "capability_type": "validator",
+  "purpose": "Evaluate feature flags against a normalized context so applications can enable, disable, or variant-route behavior without embedding flag logic in every caller.",
+  "reuse_scope": [
+    "runtime configuration systems",
+    "progressive delivery flows",
+    "tenant-aware SaaS feature gates",
+    "experimentation and rollout policies"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/feature-flags/evaluate",
+        "input_schema": "FeatureFlagRequest",
+        "output_schema": "FeatureFlagResult",
+        "description": "Evaluate a named feature flag against context attributes and optional default values."
+      }
+    ],
+    "schemas": {
+      "FeatureFlagRequest": {
+        "type": "object",
+        "required": ["flag_key", "context"],
+        "properties": {
+          "flag_key": { "type": "string" },
+          "context": { "type": "object" },
+          "default_value": {}
+        }
+      },
+      "FeatureFlagResult": {
+        "type": "object",
+        "required": ["flag_key", "value", "reason"],
+        "properties": {
+          "flag_key": { "type": "string" },
+          "value": {},
+          "reason": { "type": "string" },
+          "variant": { "type": "string" }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "config.feature_flag_evaluator",
+    "version": "0.1.0",
+    "purpose": "Evaluate runtime feature flags against contextual attributes and policy rules.",
+    "agent_usage": {
+      "when_to_use": "Use when a caller needs a deterministic feature decision based on user, tenant, environment, or rollout context.",
+      "when_not_to_use": "Do not use as a deployment system, experimentation analytics store, or remote config synchronization daemon.",
+      "example_workflow": "1) Build the evaluation context. 2) Call /feature-flags/evaluate with a flag key. 3) Route behavior using the returned value and reason."
+    },
+    "common_calls": [
+      {
+        "description": "Evaluate a tenant-scoped beta feature",
+        "method": "POST",
+        "path_or_command": "/api/v1/feature-flags/evaluate",
+        "input_example": { "flag_key": "beta_dashboard", "context": { "tenant_id": "t_123", "environment": "prod" }, "default_value": false },
+        "output_example": { "flag_key": "beta_dashboard", "value": true, "reason": "targeting_rule_match", "variant": "enabled" }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Flag key is unknown or context is missing required targeting attributes",
+        "symptom": "Fallback to default value with an explanatory reason",
+        "recovery": "Define the flag or provide the required context fields before relying on the result",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["config", "feature-flags", "targeting", "runtime", "validator"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Represent flags as typed rules with defaults, evaluate against a normalized context object, and return explicit reasons such as default, rule_match, or missing_context.",
+    "known_gotchas": "Flag evaluators become hard to trust when missing context silently produces truthy values; make defaulting behavior explicit and testable.",
+    "preferred_approach": "Keep evaluation pure and side-effect free so the same module works in APIs, workers, and local tests.",
+    "avoid_approach": "Do not mix metrics emission, rollout editing, or remote fetch loops into the evaluator."
+  },
+  "test_cases": [
+    {
+      "name": "unknown flag falls back to default",
+      "input": { "method": "POST", "path": "/feature-flags/evaluate", "body": { "flag_key": "missing_flag", "context": { "tenant_id": "t_123" }, "default_value": false } },
+      "expected_status": 200,
+      "expected_body": { "flag_key": "missing_flag", "value": false, "reason": "default_value" }
+    }
+  ]
+}

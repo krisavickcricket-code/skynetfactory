@@ -1,0 +1,150 @@
+{
+  "module_id": "registry.pipeline_catalog_indexer",
+  "version": "0.1.0",
+  "category": "data",
+  "capability_type": "indexer",
+  "purpose": "Index workflow and pipeline metadata into a searchable local catalog so planners and recommendation engines can resolve candidate pipelines by domain, modality, or capability tags.",
+  "reuse_scope": [
+    "scientific workflow catalogs",
+    "offline orchestration registries",
+    "planner support services",
+    "domain-specific pipeline discovery"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/pipeline-catalog/index",
+        "input_schema": "PipelineCatalogIndexRequest",
+        "output_schema": "PipelineCatalogIndexResult",
+        "description": "Index a set of pipeline metadata records into a local searchable catalog."
+      },
+      {
+        "method": "POST",
+        "path": "/pipeline-catalog/search",
+        "input_schema": "PipelineCatalogSearchRequest",
+        "output_schema": "PipelineCatalogSearchResult",
+        "description": "Search the indexed catalog by workflow id, domain, modality, or free-text tags."
+      }
+    ],
+    "schemas": {
+      "PipelineCatalogIndexRequest": {
+        "type": "object",
+        "required": ["entries"],
+        "properties": {
+          "entries": { "type": "array", "items": { "type": "object" } }
+        }
+      },
+      "PipelineCatalogIndexResult": {
+        "type": "object",
+        "required": ["indexed_count"],
+        "properties": {
+          "indexed_count": { "type": "integer" }
+        }
+      },
+      "PipelineCatalogSearchRequest": {
+        "type": "object",
+        "required": ["query"],
+        "properties": {
+          "query": { "type": "string" },
+          "domain": { "type": "string" }
+        }
+      },
+      "PipelineCatalogSearchResult": {
+        "type": "object",
+        "required": ["results"],
+        "properties": {
+          "results": { "type": "array", "items": { "type": "object" } }
+        }
+      }
+    }
+  },
+  "dependencies": [
+    {
+      "module_id": "analysis.pipeline_manifest_parser",
+      "version_constraint": ">=0.1.0",
+      "purpose": "Normalize pipeline metadata before indexing catalog entries",
+      "required_at": "runtime"
+    }
+  ],
+  "sidecar_specification": {
+    "module_id": "registry.pipeline_catalog_indexer",
+    "version": "0.1.0",
+    "purpose": "Build and query a local searchable pipeline catalog.",
+    "agent_usage": {
+      "when_to_use": "Use when pipeline metadata from manifests or domain guidance should become searchable by planners or recommendation engines.",
+      "when_not_to_use": "Do not use as a distributed search cluster, execution queue, or raw YAML parser.",
+      "example_workflow": "1) Gather normalized pipeline entries. 2) Call /pipeline-catalog/index. 3) Search the catalog through /pipeline-catalog/search from planning flows."
+    },
+    "common_calls": [
+      {
+        "description": "Search the catalog for neuroscience workflows",
+        "method": "POST",
+        "path_or_command": "/api/v1/pipeline-catalog/search",
+        "input_example": { "query": "organoid cell typing", "domain": "neuroscience" },
+        "output_example": { "results": [{ "workflow_id": "scanpy", "domain": "neuroscience" }] }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Entries are malformed or indexed without normalized identifiers and tags",
+        "symptom": "Poor search recall or indexing rejection",
+        "recovery": "Normalize pipeline metadata first and ensure domain or modality tags are present",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["registry", "pipeline", "catalog", "search", "indexer"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Index normalized workflow records by id, domain, modality, and free-text tags, then expose lightweight local search over the in-memory or persisted catalog.",
+    "known_gotchas": "Catalog quality collapses when raw guidance text and workflow ids are indexed without normalization, so derive canonical fields before indexing.",
+    "preferred_approach": "Keep catalog indexing and recommendation logic separate so one module stores searchable metadata and another ranks it.",
+    "avoid_approach": "Do not execute workflows or fetch remote catalogs from the indexer."
+  },
+  "test_cases": [
+    {
+      "name": "index and search a neuroscience workflow",
+      "input": { "method": "POST", "path": "/pipeline-catalog/search", "body": { "query": "organoid cell typing", "domain": "neuroscience" } },
+      "expected_status": 200
+    }
+  ]
+}

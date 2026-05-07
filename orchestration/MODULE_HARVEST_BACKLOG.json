@@ -20,7 +20,7 @@
     },
     {
       "group": "Next Source-Mined Contracts",
-      "status": "next",
+      "status": "completed",
       "candidates": [
         "config.feature_flag_evaluator",
         "api.idempotency_key_resolver",
@@ -32,6 +32,22 @@
         "notifications.template_renderer",
         "integration.webhook_event_deduplicator",
         "registry.pipeline_catalog_indexer"
+      ]
+    },
+    {
+      "group": "Next Deep Expansion",
+      "status": "next",
+      "candidates": [
+        "storage.workspace_artifact_store",
+        "storage.object_lifecycle_policy_validator",
+        "artifact.gallery_bundle_manifester",
+        "audit.request_trace_correlator",
+        "retrieval.document_chunker",
+        "retrieval.embedding_batcher",
+        "retrieval.result_reranker",
+        "planning.task_plan_generator",
+        "registry.module_graph_builder",
+        "analysis.samplesheet_generator"
       ]
     },
     {
@@ -64,7 +80,7 @@
     }
   ],
   "coverage_targets": {
-    "current_pending_contract_count": 42,
+    "current_pending_contract_count": 52,
     "near_term_target": 64,
     "mid_term_target": 128,
     "long_term_target": "taxonomy-driven expansion across all major superdomains"

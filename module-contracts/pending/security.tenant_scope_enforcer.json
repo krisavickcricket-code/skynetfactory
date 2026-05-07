@@ -1,0 +1,125 @@
+{
+  "module_id": "security.tenant_scope_enforcer",
+  "version": "0.1.0",
+  "category": "security",
+  "capability_type": "validator",
+  "purpose": "Enforce tenant scoping rules across requests and resources so multi-tenant systems can reject cross-organization access before state is exposed or mutated.",
+  "reuse_scope": [
+    "B2B SaaS APIs",
+    "workspace-scoped orchestration services",
+    "organization-aware registries",
+    "shared infrastructure control planes"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/security/tenant-scope/check",
+        "input_schema": "TenantScopeRequest",
+        "output_schema": "TenantScopeResult",
+        "description": "Check whether a principal tenant scope may access a resource tenant scope."
+      }
+    ],
+    "schemas": {
+      "TenantScopeRequest": {
+        "type": "object",
+        "required": ["principal_tenant_id", "resource_tenant_id"],
+        "properties": {
+          "principal_tenant_id": { "type": "string" },
+          "resource_tenant_id": { "type": "string" },
+          "principal_roles": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "TenantScopeResult": {
+        "type": "object",
+        "required": ["allowed"],
+        "properties": {
+          "allowed": { "type": "boolean" },
+          "reason": { "type": "string" }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "security.tenant_scope_enforcer",
+    "version": "0.1.0",
+    "purpose": "Enforce tenant boundaries around requests and resources.",
+    "agent_usage": {
+      "when_to_use": "Use before any operation where a principal and resource each belong to an organization or workspace boundary.",
+      "when_not_to_use": "Do not use as a billing tenancy model, provisioning service, or full RBAC engine.",
+      "example_workflow": "1) Resolve the principal tenant and resource tenant. 2) Call /security/tenant-scope/check. 3) Continue only when allowed is true."
+    },
+    "common_calls": [
+      {
+        "description": "Check whether a worker can access another tenant's workspace",
+        "method": "POST",
+        "path_or_command": "/api/v1/security/tenant-scope/check",
+        "input_example": { "principal_tenant_id": "tenant_a", "resource_tenant_id": "tenant_b", "principal_roles": ["member"] },
+        "output_example": { "allowed": false, "reason": "tenant_mismatch" }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Principal and resource scopes differ without an explicit cross-tenant override role",
+        "symptom": "Access denied with a tenant mismatch reason",
+        "recovery": "Use the correct tenant context or an explicitly authorized admin path",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["security", "tenant", "scope", "multi-tenant", "validator"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Treat tenant scope checking as a small pure policy boundary with explicit allow reasons like same_tenant or privileged_override and deny reasons like tenant_mismatch.",
+    "known_gotchas": "Systems often conflate tenant scope and resource ownership; keep tenant boundary checks reusable even when ownership logic differs.",
+    "preferred_approach": "Apply tenant checks before expensive downstream reads so mismatches fail fast.",
+    "avoid_approach": "Do not bury tenant scoping inside unrelated repository methods where it becomes invisible and inconsistent."
+  },
+  "test_cases": [
+    {
+      "name": "deny cross-tenant member access",
+      "input": { "method": "POST", "path": "/security/tenant-scope/check", "body": { "principal_tenant_id": "tenant_a", "resource_tenant_id": "tenant_b", "principal_roles": ["member"] } },
+      "expected_status": 200,
+      "expected_body": { "allowed": false, "reason": "tenant_mismatch" }
+    }
+  ]
+}

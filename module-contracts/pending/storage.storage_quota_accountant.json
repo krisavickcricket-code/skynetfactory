@@ -1,0 +1,126 @@
+{
+  "module_id": "storage.storage_quota_accountant",
+  "version": "0.1.0",
+  "category": "storage",
+  "capability_type": "analyzer",
+  "purpose": "Calculate storage usage against quota policy and determine whether additional writes, uploads, or artifact bundles should be allowed for a given subject, user, tenant, or workspace.",
+  "reuse_scope": [
+    "object storage gateways",
+    "workspace artifact stores",
+    "tenant quota enforcement",
+    "upload-heavy applications"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/storage/quota/evaluate",
+        "input_schema": "StorageQuotaRequest",
+        "output_schema": "StorageQuotaResult",
+        "description": "Evaluate whether a requested write fits within a configured storage quota."
+      }
+    ],
+    "schemas": {
+      "StorageQuotaRequest": {
+        "type": "object",
+        "required": ["quota_bytes", "used_bytes", "requested_bytes"],
+        "properties": {
+          "quota_bytes": { "type": "integer" },
+          "used_bytes": { "type": "integer" },
+          "requested_bytes": { "type": "integer" }
+        }
+      },
+      "StorageQuotaResult": {
+        "type": "object",
+        "required": ["allowed", "remaining_bytes"],
+        "properties": {
+          "allowed": { "type": "boolean" },
+          "remaining_bytes": { "type": "integer" },
+          "projected_used_bytes": { "type": "integer" }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "storage.storage_quota_accountant",
+    "version": "0.1.0",
+    "purpose": "Evaluate storage quota usage before accepting new writes.",
+    "agent_usage": {
+      "when_to_use": "Use before uploads, artifact generation, or bundle assembly that changes persistent storage usage.",
+      "when_not_to_use": "Do not use as the byte-scanning ingestion layer or as a garbage collection scheduler.",
+      "example_workflow": "1) Gather used and requested byte counts. 2) Call /storage/quota/evaluate. 3) Proceed only when allowed is true."
+    },
+    "common_calls": [
+      {
+        "description": "Check whether a new upload fits quota",
+        "method": "POST",
+        "path_or_command": "/api/v1/storage/quota/evaluate",
+        "input_example": { "quota_bytes": 1000000, "used_bytes": 850000, "requested_bytes": 100000 },
+        "output_example": { "allowed": true, "remaining_bytes": 50000, "projected_used_bytes": 950000 }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Requested write would exceed the quota ceiling",
+        "symptom": "allowed false with remaining_bytes at zero or below request need",
+        "recovery": "Reduce stored data, clean up artifacts, or increase the quota before retrying",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["storage", "quota", "uploads", "artifacts", "analyzer"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Treat quota evaluation as a pure arithmetic policy over current usage and requested bytes, and return projected usage alongside the allow or deny decision.",
+    "known_gotchas": "Quota drift happens when callers pass mixed units or stale usage snapshots, so keep the interface explicitly byte-based and document staleness assumptions.",
+    "preferred_approach": "Return both remaining and projected usage to help UIs and callers explain denials clearly.",
+    "avoid_approach": "Do not scan the file system or mutate storage state from the quota accountant."
+  },
+  "test_cases": [
+    {
+      "name": "deny write that exceeds quota",
+      "input": { "method": "POST", "path": "/storage/quota/evaluate", "body": { "quota_bytes": 1000, "used_bytes": 950, "requested_bytes": 100 } },
+      "expected_status": 200,
+      "expected_body": { "allowed": false, "remaining_bytes": 50 }
+    }
+  ]
+}

@@ -78,30 +78,40 @@
   "status": {
     "contracts_already_written": [
       "agent.capability_manifest_provider",
+      "api.idempotency_key_resolver",
       "analysis.pipeline_recommendation_engine",
+      "audit.decision_log_writer",
       "billing.payment_reconciliation",
+      "config.feature_flag_evaluator",
+      "health.dependency_probe_registry",
+      "integration.webhook_event_deduplicator",
       "integration.webhook_signature_verifier",
       "media.preview_generation_dispatcher",
       "media.portrait_generation_judge",
       "media.subject_embedding_updater",
+      "notifications.template_renderer",
       "orchestration.job_queue_gateway",
       "provenance.run_manifest_generator",
+      "registry.pipeline_catalog_indexer",
       "research.query_generation_planner",
+      "security.resource_ownership_guard",
+      "security.tenant_scope_enforcer",
       "storage.presigned_upload_gateway",
+      "storage.storage_quota_accountant",
       "validation.domain_manifest_validator",
       "workflow.state_transition_manager",
       "workflow.step_registry_provider",
       "workflow.tool_broker_authorizer"
     ],
     "contracts_to_write_next": [
-      "config.feature_flag_evaluator",
-      "api.idempotency_key_resolver",
-      "storage.storage_quota_accountant",
-      "audit.decision_log_writer",
-      "health.dependency_probe_registry",
-      "security.resource_ownership_guard",
-      "security.tenant_scope_enforcer",
-      "notifications.template_renderer"
+      "storage.workspace_artifact_store",
+      "storage.object_lifecycle_policy_validator",
+      "artifact.gallery_bundle_manifester",
+      "audit.request_trace_correlator",
+      "retrieval.document_chunker",
+      "retrieval.embedding_batcher",
+      "retrieval.result_reranker",
+      "planning.task_plan_generator"
     ]
   }
 }

@@ -1,0 +1,128 @@
+{
+  "module_id": "api.idempotency_key_resolver",
+  "version": "0.1.0",
+  "category": "api",
+  "capability_type": "transformer",
+  "purpose": "Resolve, normalize, and validate idempotency keys for mutation endpoints so duplicate submissions can be safely detected and replayed without duplicated side effects.",
+  "reuse_scope": [
+    "checkout and payment APIs",
+    "job submission endpoints",
+    "upload initiation surfaces",
+    "write-heavy service mutations"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/idempotency/resolve",
+        "input_schema": "IdempotencyRequest",
+        "output_schema": "IdempotencyResult",
+        "description": "Normalize an incoming idempotency key and return a stable lookup fingerprint."
+      }
+    ],
+    "schemas": {
+      "IdempotencyRequest": {
+        "type": "object",
+        "required": ["method", "path"],
+        "properties": {
+          "method": { "type": "string" },
+          "path": { "type": "string" },
+          "idempotency_key": { "type": "string" },
+          "body": { "type": "object" }
+        }
+      },
+      "IdempotencyResult": {
+        "type": "object",
+        "required": ["resolved_key", "request_fingerprint", "status"],
+        "properties": {
+          "resolved_key": { "type": "string" },
+          "request_fingerprint": { "type": "string" },
+          "status": { "type": "string", "enum": ["accepted", "rejected"] },
+          "reason": { "type": "string" }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "api.idempotency_key_resolver",
+    "version": "0.1.0",
+    "purpose": "Normalize and validate idempotency keys for mutation endpoints.",
+    "agent_usage": {
+      "when_to_use": "Use before processing non-idempotent writes such as payments, queue submissions, or upload issuance.",
+      "when_not_to_use": "Do not use as the persistence store for replay records or as a cache eviction service.",
+      "example_workflow": "1) Receive a mutation request. 2) Call /idempotency/resolve. 3) Use the resolved key and fingerprint to check or persist a replay record."
+    },
+    "common_calls": [
+      {
+        "description": "Resolve a checkout submission key",
+        "method": "POST",
+        "path_or_command": "/api/v1/idempotency/resolve",
+        "input_example": { "method": "POST", "path": "/payments/checkout", "idempotency_key": " abc-123 ", "body": { "session_id": "sess_1" } },
+        "output_example": { "resolved_key": "abc-123", "request_fingerprint": "sha256:...", "status": "accepted" }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Key is missing, malformed, or inconsistent with a replayed request body",
+        "symptom": "Rejected resolution with a clear reason",
+        "recovery": "Provide a valid stable key and ensure retries use the same payload shape",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["api", "idempotency", "mutations", "replay", "transformer"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Trim and validate the supplied key, derive a request fingerprint from method, path, and canonicalized body shape, and reject mismatched replays early.",
+    "known_gotchas": "Idempotency breaks when fingerprinting depends on unstable field order or timestamps, so canonicalize payloads before hashing.",
+    "preferred_approach": "Return a normalized key plus a deterministic fingerprint that a separate replay store can persist.",
+    "avoid_approach": "Do not store replay records or execute the underlying mutation inside this resolver."
+  },
+  "test_cases": [
+    {
+      "name": "trims surrounding whitespace from idempotency key",
+      "input": { "method": "POST", "path": "/idempotency/resolve", "body": { "method": "POST", "path": "/payments/checkout", "idempotency_key": " abc-123 ", "body": { "session_id": "sess_1" } } },
+      "expected_status": 200,
+      "expected_body": { "resolved_key": "abc-123", "status": "accepted" }
+    }
+  ]
+}

@@ -1,0 +1,126 @@
+{
+  "module_id": "integration.webhook_event_deduplicator",
+  "version": "0.1.0",
+  "category": "integration",
+  "capability_type": "validator",
+  "purpose": "Detect duplicate webhook deliveries using provider event identifiers and payload fingerprints so downstream reconciliation logic is only applied once per event.",
+  "reuse_scope": [
+    "payment webhook processors",
+    "SaaS integration gateways",
+    "event ingestion APIs",
+    "provider replay protection layers"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/webhooks/deduplicate",
+        "input_schema": "WebhookDedupRequest",
+        "output_schema": "WebhookDedupResult",
+        "description": "Determine whether a webhook event should be treated as new or duplicate."
+      }
+    ],
+    "schemas": {
+      "WebhookDedupRequest": {
+        "type": "object",
+        "required": ["provider", "payload"],
+        "properties": {
+          "provider": { "type": "string" },
+          "event_id": { "type": "string" },
+          "payload": { "type": "object" }
+        }
+      },
+      "WebhookDedupResult": {
+        "type": "object",
+        "required": ["is_duplicate", "dedup_key"],
+        "properties": {
+          "is_duplicate": { "type": "boolean" },
+          "dedup_key": { "type": "string" },
+          "reason": { "type": "string" }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "integration.webhook_event_deduplicator",
+    "version": "0.1.0",
+    "purpose": "Classify webhook events as new or duplicate before downstream handling.",
+    "agent_usage": {
+      "when_to_use": "Use immediately after webhook verification and before any stateful reconciliation or side effects occur.",
+      "when_not_to_use": "Do not use as a reconciliation engine, signature verifier, or event queue transport.",
+      "example_workflow": "1) Verify webhook authenticity. 2) Call /webhooks/deduplicate. 3) Skip downstream handlers when is_duplicate is true."
+    },
+    "common_calls": [
+      {
+        "description": "Check whether a Stripe event has already been processed",
+        "method": "POST",
+        "path_or_command": "/api/v1/webhooks/deduplicate",
+        "input_example": { "provider": "stripe", "event_id": "evt_123", "payload": { "type": "checkout.session.completed" } },
+        "output_example": { "is_duplicate": false, "dedup_key": "stripe:evt_123" }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Provider does not supply a stable event id and the payload cannot be canonicalized safely",
+        "symptom": "Deduplication falls back to payload fingerprinting or rejects with an ambiguous identity reason",
+        "recovery": "Normalize provider event identity fields or add a canonical fingerprint strategy",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["integration", "webhooks", "deduplication", "events", "validator"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Build a stable dedup key from provider plus event id when available, otherwise hash a canonicalized payload shape and expose whether the event was seen before.",
+    "known_gotchas": "Naive payload hashing breaks when providers inject timestamps or unordered objects, so canonicalization needs to be deliberate.",
+    "preferred_approach": "Keep deduplication separate from reconciliation so handlers can short-circuit before any business state changes.",
+    "avoid_approach": "Do not process business side effects from inside the deduplicator."
+  },
+  "test_cases": [
+    {
+      "name": "use provider event id when available",
+      "input": { "method": "POST", "path": "/webhooks/deduplicate", "body": { "provider": "stripe", "event_id": "evt_123", "payload": { "type": "checkout.session.completed" } } },
+      "expected_status": 200,
+      "expected_body": { "dedup_key": "stripe:evt_123", "is_duplicate": false }
+    }
+  ]
+}
