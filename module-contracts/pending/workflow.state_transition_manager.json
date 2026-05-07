@@ -1,0 +1,125 @@
+{
+  "module_id": "workflow.state_transition_manager",
+  "version": "0.1.0",
+  "category": "processing",
+  "capability_type": "transformer",
+  "purpose": "Apply explicit state machine transitions for workflow entities, reject invalid jumps, and return updated state snapshots that downstream steps can trust.",
+  "reuse_scope": [
+    "order processing workflows",
+    "agent run state machines",
+    "session lifecycle orchestration",
+    "multi-step approval flows"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/workflow/state/transition",
+        "input_schema": "StateTransitionRequest",
+        "output_schema": "StateTransitionResult",
+        "description": "Apply a requested event to a workflow state machine and return the updated state."
+      }
+    ],
+    "schemas": {
+      "StateTransitionRequest": {
+        "type": "object",
+        "required": ["current_state", "event"],
+        "properties": {
+          "current_state": { "type": "string" },
+          "event": { "type": "string" },
+          "context": { "type": "object" }
+        }
+      },
+      "StateTransitionResult": {
+        "type": "object",
+        "required": ["previous_state", "next_state"],
+        "properties": {
+          "previous_state": { "type": "string" },
+          "next_state": { "type": "string" },
+          "error": { "type": "string" }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "workflow.state_transition_manager",
+    "version": "0.1.0",
+    "purpose": "Explicit workflow state transition engine with invalid-jump protection.",
+    "agent_usage": {
+      "when_to_use": "Use when workflow entities move through named states and invalid jumps must be rejected deterministically.",
+      "when_not_to_use": "Do not use as a generic database layer, queue runner, or notification service.",
+      "example_workflow": "1) Load the current state. 2) Call /workflow/state/transition with an event. 3) Persist the returned next_state only when the transition is valid."
+    },
+    "common_calls": [
+      {
+        "description": "Transition a workflow from validating to pricing",
+        "method": "POST",
+        "path_or_command": "/api/v1/workflow/state/transition",
+        "input_example": { "current_state": "validating", "event": "validation_passed" },
+        "output_example": { "previous_state": "validating", "next_state": "pricing" }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Event does not map to a valid transition from the current state",
+        "symptom": "409 error or explicit invalid transition response",
+        "recovery": "Apply the correct preceding step or repair the workflow state before retrying",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["workflow", "state", "transition", "state-machine", "transformer"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Represent valid transitions explicitly as state-event maps, update an in-memory snapshot first, and persist only the sanctioned next state and error metadata.",
+    "known_gotchas": "Ad hoc state strings drift quickly across code paths, so keep the canonical transition table centralized and test invalid jumps directly.",
+    "preferred_approach": "Return previous and next state in every success response to simplify audit and reducer logic downstream.",
+    "avoid_approach": "Do not infer state transitions from side effects and do not silently coerce invalid events into no-ops."
+  },
+  "test_cases": [
+    {
+      "name": "reject invalid terminal transition",
+      "input": { "method": "POST", "path": "/workflow/state/transition", "body": { "current_state": "completed", "event": "persist" } },
+      "expected_status": 409
+    }
+  ]
+}

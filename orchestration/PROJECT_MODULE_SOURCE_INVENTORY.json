@@ -78,20 +78,30 @@
   "status": {
     "contracts_already_written": [
       "agent.capability_manifest_provider",
+      "analysis.pipeline_recommendation_engine",
+      "billing.payment_reconciliation",
       "integration.webhook_signature_verifier",
+      "media.preview_generation_dispatcher",
+      "media.portrait_generation_judge",
+      "media.subject_embedding_updater",
       "orchestration.job_queue_gateway",
       "provenance.run_manifest_generator",
-      "storage.presigned_upload_gateway"
+      "research.query_generation_planner",
+      "storage.presigned_upload_gateway",
+      "validation.domain_manifest_validator",
+      "workflow.state_transition_manager",
+      "workflow.step_registry_provider",
+      "workflow.tool_broker_authorizer"
     ],
     "contracts_to_write_next": [
-      "security.upload_token_issuer",
-      "media.portrait_upload_judge",
-      "storage.bio_file_scanner",
-      "analysis.pipeline_manifest_parser",
-      "billing.entitlement_evaluator",
-      "registry.local_manifest_registry",
-      "artifact.download_bundle_builder",
-      "research.evidence_bundle_generator"
+      "config.feature_flag_evaluator",
+      "api.idempotency_key_resolver",
+      "storage.storage_quota_accountant",
+      "audit.decision_log_writer",
+      "health.dependency_probe_registry",
+      "security.resource_ownership_guard",
+      "security.tenant_scope_enforcer",
+      "notifications.template_renderer"
     ]
   }
 }

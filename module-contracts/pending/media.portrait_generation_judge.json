@@ -1,0 +1,126 @@
+{
+  "module_id": "media.portrait_generation_judge",
+  "version": "0.1.0",
+  "category": "processing",
+  "capability_type": "analyzer",
+  "purpose": "Score generated portrait outputs for acceptance, attach structured review notes, and separate publishable generations from weak or malformed outputs before gallery delivery.",
+  "reuse_scope": [
+    "image generation review queues",
+    "creative output quality gates",
+    "gallery publication filters",
+    "batch render acceptance workflows"
+  ],
+  "language": "python",
+  "runtime": "python3",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/generations/judge",
+        "input_schema": "GenerationJudgeRequest",
+        "output_schema": "GenerationJudgeResult",
+        "description": "Judge a generated portrait result and return a score plus publication recommendation."
+      }
+    ],
+    "schemas": {
+      "GenerationJudgeRequest": {
+        "type": "object",
+        "required": ["generation_id"],
+        "properties": {
+          "generation_id": { "type": "string" },
+          "image_base64": { "type": "string" }
+        }
+      },
+      "GenerationJudgeResult": {
+        "type": "object",
+        "required": ["generation_id", "score", "decision"],
+        "properties": {
+          "generation_id": { "type": "string" },
+          "score": { "type": "number" },
+          "decision": { "type": "string", "enum": ["accept", "reject", "review"] },
+          "notes": { "type": "string" }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "media.portrait_generation_judge",
+    "version": "0.1.0",
+    "purpose": "Judge generated portrait outputs before publication or bundle delivery.",
+    "agent_usage": {
+      "when_to_use": "Use after generation completes and before images are published to a gallery, bundled for download, or marked successful in a workflow.",
+      "when_not_to_use": "Do not use as a user-facing content moderation product, copyright detector, or final purchase decision system.",
+      "example_workflow": "1) Receive a completed generation id. 2) Call /generations/judge. 3) Publish only when the decision is accept or review policies allow it."
+    },
+    "common_calls": [
+      {
+        "description": "Judge a generated portrait",
+        "method": "POST",
+        "path_or_command": "/api/v1/generations/judge",
+        "input_example": { "generation_id": "gen_123", "image_base64": "..." },
+        "output_example": { "generation_id": "gen_123", "score": 9.5, "decision": "accept", "notes": "Excellent quality" }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Generation asset is missing or scoring cannot produce a usable result",
+        "symptom": "400 or 404 judgment failure",
+        "recovery": "Regenerate the asset or re-run judgment after the generation artifact becomes available",
+        "severity": "transient"
+      }
+    ],
+    "composition_tags": ["generation", "portrait", "judging", "gallery", "analyzer"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Accept a generation identifier, compute or ingest review signals, store a numeric score with structured notes, and expose an explicit accept or reject decision for downstream gallery modules.",
+    "known_gotchas": "Judgment modules often drift into moderation or ranking; keep this module focused on post-generation quality acceptance for portrait-like outputs.",
+    "preferred_approach": "Return both a score and a decision so downstream workflows can set their own publication thresholds.",
+    "avoid_approach": "Do not bundle storage, gallery publishing, or payment release into the judgment module."
+  },
+  "test_cases": [
+    {
+      "name": "accept high quality generation",
+      "input": { "method": "POST", "path": "/generations/judge", "body": { "generation_id": "gen_123", "image_base64": "..." } },
+      "expected_status": 200,
+      "expected_body": { "generation_id": "gen_123", "decision": "accept" }
+    }
+  ]
+}

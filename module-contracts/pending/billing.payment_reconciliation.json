@@ -1,0 +1,132 @@
+{
+  "module_id": "billing.payment_reconciliation",
+  "version": "0.1.0",
+  "category": "integration",
+  "capability_type": "gateway",
+  "purpose": "Normalize payment-provider webhook payloads, verify idempotent reconciliation rules, and apply internal payment status transitions with audit-ready event metadata.",
+  "reuse_scope": [
+    "checkout webhook processors",
+    "subscription state sync services",
+    "payment audit pipelines",
+    "commerce fulfillment gates"
+  ],
+  "language": "python",
+  "runtime": "python3",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/payments/reconcile",
+        "input_schema": "PaymentReconciliationRequest",
+        "output_schema": "PaymentReconciliationResult",
+        "description": "Reconcile a normalized provider webhook payload against an internal payment record."
+      }
+    ],
+    "schemas": {
+      "PaymentReconciliationRequest": {
+        "type": "object",
+        "required": ["payload"],
+        "properties": {
+          "payload": { "type": "object" }
+        }
+      },
+      "PaymentReconciliationResult": {
+        "type": "object",
+        "required": ["payment_status", "idempotent", "already_processed"],
+        "properties": {
+          "payment_status": { "type": "string" },
+          "session_status": { "type": "string" },
+          "idempotent": { "type": "boolean" },
+          "already_processed": { "type": "boolean" }
+        }
+      }
+    }
+  },
+  "dependencies": [
+    {
+      "module_id": "integration.webhook_signature_verifier",
+      "version_constraint": ">=0.1.0",
+      "purpose": "Verify the webhook boundary before reconciliation is attempted",
+      "required_at": "runtime"
+    }
+  ],
+  "sidecar_specification": {
+    "module_id": "billing.payment_reconciliation",
+    "version": "0.1.0",
+    "purpose": "Idempotent reconciliation of payment-provider events into internal payment state.",
+    "agent_usage": {
+      "when_to_use": "Use after webhook authenticity is established and a provider payload needs to be mapped onto internal payment and session state.",
+      "when_not_to_use": "Do not use for checkout creation, invoice generation, or card capture flows before a provider event exists.",
+      "example_workflow": "1) Verify webhook signature. 2) Call /payments/reconcile with the provider payload. 3) Persist paid or unchanged state and record audit metadata."
+    },
+    "common_calls": [
+      {
+        "description": "Reconcile a payment webhook",
+        "method": "POST",
+        "path_or_command": "/api/v1/payments/reconcile",
+        "input_example": { "payload": { "provider_payment_id": "pay_123", "status": "paid" } },
+        "output_example": { "payment_status": "paid", "session_status": "paid", "idempotent": true, "already_processed": false }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Payload cannot be normalized to a provider payment identifier or the payment record does not exist",
+        "symptom": "400 or 404 reconciliation error",
+        "recovery": "Fix payload mapping, ensure the internal payment exists, and retry with the original event",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["billing", "payments", "webhook", "reconciliation", "gateway"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Normalize provider payload shapes first, look up the internal payment by provider identifier, short-circuit when already paid, and persist raw event metadata for auditability.",
+    "known_gotchas": "Different providers surface transaction identifiers and event identifiers in different fields, and duplicate deliveries must not re-apply state transitions.",
+    "preferred_approach": "Keep the reconciliation result deterministic and explicit about whether the event changed state or was idempotently ignored.",
+    "avoid_approach": "Do not call external provider APIs from the reconciler and do not bury webhook signature verification inside this module."
+  },
+  "test_cases": [
+    {
+      "name": "already paid event returns idempotent response",
+      "input": { "method": "POST", "path": "/payments/reconcile", "body": { "payload": { "provider_payment_id": "pay_123", "status": "paid" } } },
+      "expected_status": 200,
+      "expected_body": { "payment_status": "paid", "idempotent": true, "already_processed": true }
+    }
+  ]
+}

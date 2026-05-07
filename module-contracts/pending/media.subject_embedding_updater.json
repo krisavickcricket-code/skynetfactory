@@ -1,0 +1,126 @@
+{
+  "module_id": "media.subject_embedding_updater",
+  "version": "0.1.0",
+  "category": "processing",
+  "capability_type": "transformer",
+  "purpose": "Derive, normalize, and persist a subject embedding from an accepted portrait upload so later preview and generation modules can reuse a stable subject representation.",
+  "reuse_scope": [
+    "portrait generation systems",
+    "avatar personalization flows",
+    "face-driven subject onboarding",
+    "identity-linked media pipelines"
+  ],
+  "language": "python",
+  "runtime": "python3",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/subjects/embedding",
+        "input_schema": "SubjectEmbeddingRequest",
+        "output_schema": "SubjectEmbeddingResult",
+        "description": "Create or replace the canonical embedding for a subject from accepted portrait image bytes."
+      }
+    ],
+    "schemas": {
+      "SubjectEmbeddingRequest": {
+        "type": "object",
+        "required": ["subject_id", "image_base64"],
+        "properties": {
+          "subject_id": { "type": "string" },
+          "image_base64": { "type": "string" },
+          "replace_existing": { "type": "boolean" }
+        }
+      },
+      "SubjectEmbeddingResult": {
+        "type": "object",
+        "required": ["subject_id", "embedding_dimensions", "status"],
+        "properties": {
+          "subject_id": { "type": "string" },
+          "embedding_dimensions": { "type": "integer" },
+          "status": { "type": "string", "enum": ["created", "updated"] }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "media.subject_embedding_updater",
+    "version": "0.1.0",
+    "purpose": "Create and persist subject embeddings from approved portrait uploads.",
+    "agent_usage": {
+      "when_to_use": "Use after portrait quality checks pass and before preview or final generation jobs depend on a subject embedding.",
+      "when_not_to_use": "Do not use for biometric identity verification across people, nearest-neighbor search over many users, or generic image tagging.",
+      "example_workflow": "1) Confirm upload quality. 2) Call /subjects/embedding with the accepted portrait. 3) Persist the normalized vector for later generation steps."
+    },
+    "common_calls": [
+      {
+        "description": "Update a subject embedding from a portrait",
+        "method": "POST",
+        "path_or_command": "/api/v1/subjects/embedding",
+        "input_example": { "subject_id": "subj_123", "image_base64": "...", "replace_existing": true },
+        "output_example": { "subject_id": "subj_123", "embedding_dimensions": 512, "status": "updated" }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Image bytes decode but the embedder returns an empty or zero-norm vector",
+        "symptom": "400 error or explicit embedding generation failure",
+        "recovery": "Retry with a valid accepted portrait and reject zero vectors before persistence",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["portrait", "embedding", "subject", "media", "transformer"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Decode bytes, derive a deterministic or model-backed vector, normalize it to unit length, serialize the embedding safely, and update the subject record through a repository boundary.",
+    "known_gotchas": "Vectors must stay dimensionally stable across runs, and replacing an existing embedding should be explicit because preview caches may depend on it.",
+    "preferred_approach": "Keep embedding generation and repository persistence separate so the vector logic can be reused in offline backfills or alternate transports.",
+    "avoid_approach": "Do not couple embedding generation to payment, session, or gallery logic."
+  },
+  "test_cases": [
+    {
+      "name": "creates normalized embedding for accepted portrait",
+      "input": { "method": "POST", "path": "/subjects/embedding", "body": { "subject_id": "subj_123", "image_base64": "...", "replace_existing": true } },
+      "expected_status": 200,
+      "expected_body": { "subject_id": "subj_123", "embedding_dimensions": 512, "status": "updated" }
+    }
+  ]
+}

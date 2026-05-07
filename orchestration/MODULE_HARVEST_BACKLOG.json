@@ -1,0 +1,72 @@
+{
+  "generated_at": "2026-05-07T17:16:19.4330863Z",
+  "purpose": "Actionable next-wave backlog for expanding the module library beyond surface-level common modules.",
+  "backlog_groups": [
+    {
+      "group": "Immediate Source-Mined Contracts",
+      "status": "completed",
+      "candidates": [
+        "media.subject_embedding_updater",
+        "billing.payment_reconciliation",
+        "media.preview_generation_dispatcher",
+        "media.portrait_generation_judge",
+        "analysis.pipeline_recommendation_engine",
+        "research.query_generation_planner",
+        "workflow.tool_broker_authorizer",
+        "workflow.state_transition_manager",
+        "workflow.step_registry_provider",
+        "validation.domain_manifest_validator"
+      ]
+    },
+    {
+      "group": "Next Source-Mined Contracts",
+      "status": "next",
+      "candidates": [
+        "config.feature_flag_evaluator",
+        "api.idempotency_key_resolver",
+        "storage.storage_quota_accountant",
+        "audit.decision_log_writer",
+        "health.dependency_probe_registry",
+        "security.resource_ownership_guard",
+        "security.tenant_scope_enforcer",
+        "notifications.template_renderer",
+        "integration.webhook_event_deduplicator",
+        "registry.pipeline_catalog_indexer"
+      ]
+    },
+    {
+      "group": "Foundational Families Still Thin",
+      "status": "important",
+      "candidates": [
+        "config.feature_flag_evaluator",
+        "api.idempotency_key_resolver",
+        "storage.storage_quota_accountant",
+        "audit.decision_log_writer",
+        "health.dependency_probe_registry",
+        "security.resource_ownership_guard",
+        "security.tenant_scope_enforcer",
+        "notifications.template_renderer"
+      ]
+    },
+    {
+      "group": "Domain-Specialized Expansion",
+      "status": "broad",
+      "candidates": [
+        "analysis.samplesheet_generator",
+        "analysis.input_classification_router",
+        "artifact.gallery_bundle_manifester",
+        "retrieval.rag_context_builder",
+        "research.spec_lint_reviewer",
+        "research.red_team_review_runner",
+        "registry.pipeline_catalog_indexer",
+        "workflow.capability_composer"
+      ]
+    }
+  ],
+  "coverage_targets": {
+    "current_pending_contract_count": 42,
+    "near_term_target": 64,
+    "mid_term_target": 128,
+    "long_term_target": "taxonomy-driven expansion across all major superdomains"
+  }
+}

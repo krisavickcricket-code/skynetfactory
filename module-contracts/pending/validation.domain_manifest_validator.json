@@ -1,0 +1,130 @@
+{
+  "module_id": "validation.domain_manifest_validator",
+  "version": "0.1.0",
+  "category": "data",
+  "capability_type": "validator",
+  "purpose": "Validate domain manifest JSON documents against a strict schema and return actionable errors before registry ingestion or workflow composition.",
+  "reuse_scope": [
+    "manifest-driven platforms",
+    "offline module registries",
+    "plugin discovery systems",
+    "workflow catalog ingestion"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/manifests/validate",
+        "input_schema": "ManifestValidationRequest",
+        "output_schema": "ManifestValidationResult",
+        "description": "Validate one domain manifest document and return a pass or fail result with schema errors."
+      }
+    ],
+    "schemas": {
+      "ManifestValidationRequest": {
+        "type": "object",
+        "required": ["manifest"],
+        "properties": {
+          "manifest": { "type": "object" }
+        }
+      },
+      "ManifestValidationResult": {
+        "type": "object",
+        "required": ["valid"],
+        "properties": {
+          "valid": { "type": "boolean" },
+          "errors": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  },
+  "dependencies": [
+    {
+      "module_id": "npm:ajv",
+      "version_constraint": "^8.17.0",
+      "purpose": "Compile and execute JSON Schema validation for domain manifest documents",
+      "required_at": "runtime"
+    }
+  ],
+  "sidecar_specification": {
+    "module_id": "validation.domain_manifest_validator",
+    "version": "0.1.0",
+    "purpose": "Schema validator for domain manifest JSON documents.",
+    "agent_usage": {
+      "when_to_use": "Use before loading manifests into a local registry or composing workflows from manifest metadata.",
+      "when_not_to_use": "Do not use for runtime execution authorization, network schema negotiation, or arbitrary binary file validation.",
+      "example_workflow": "1) Load a manifest JSON document. 2) Call /manifests/validate. 3) Ingest only when valid is true and error output is empty."
+    },
+    "common_calls": [
+      {
+        "description": "Validate a domain manifest",
+        "method": "POST",
+        "path_or_command": "/api/v1/manifests/validate",
+        "input_example": { "manifest": { "name": "portrait", "version": "1.0.0", "description": "Demo", "capabilities": ["render"], "entry": "index.js" } },
+        "output_example": { "valid": true, "errors": [] }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Manifest omits required fields or contains invalid semantic version or capability structure",
+        "symptom": "valid false with one or more schema error messages",
+        "recovery": "Correct the manifest fields and re-run validation before registry load",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["manifest", "schema", "validation", "registry", "validator"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Compile the domain manifest JSON schema once, validate incoming objects with Ajv, and convert schema errors into a stable array of human-readable failure strings.",
+    "known_gotchas": "Manifest validation fails silently in some systems when JSON parsing and schema validation errors are mixed together; keep these error classes distinct.",
+    "preferred_approach": "Treat the validator as a reusable pure boundary that other registry loaders can call before accepting a manifest.",
+    "avoid_approach": "Do not recursively load directories or mutate registry state from the validator itself."
+  },
+  "test_cases": [
+    {
+      "name": "reject manifest missing entry field",
+      "input": { "method": "POST", "path": "/manifests/validate", "body": { "manifest": { "name": "portrait", "version": "1.0.0", "description": "Demo", "capabilities": ["render"] } } },
+      "expected_status": 200,
+      "expected_body": { "valid": false }
+    }
+  ]
+}

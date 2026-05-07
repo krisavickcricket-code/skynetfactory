@@ -1,0 +1,539 @@
+{
+  "generated_at": "2026-05-07T17:16:19.4330863Z",
+  "purpose": "Canonical search space for building a very large reusable module library. This is a taxonomy and combinatoric discovery model, not a runtime contract schema.",
+  "thesis": {
+    "statement": "A universal module library is not discovered only by repeating patterns. It emerges from a structured capability lattice spanning domains, resources, operations, interfaces, policies, and lifecycle stages.",
+    "implication": "Manual contract writing finds surface modules. Taxonomy-driven harvesting finds deep and niche modules that only appear once today but will reappear in different products later."
+  },
+  "sources_of_shape": [
+    {
+      "name": "OpenTelemetry Semantic Conventions",
+      "url": "https://opentelemetry.io/docs/specs/semconv/",
+      "note": "Useful model for broad semantic coverage plus deeper domain-specific conventions."
+    },
+    {
+      "name": "Kubernetes Concepts",
+      "url": "https://kubernetes.io/docs/concepts/index.html",
+      "note": "Useful for operational decomposition into workloads, networking, storage, configuration, security, and policies."
+    },
+    {
+      "name": "OWASP ASVS",
+      "url": "https://devguide.owasp.org/es/06-verification/01-guides/03-asvs/",
+      "note": "Useful as a cross-cutting capability map for auth, sessions, access control, files, APIs, config, crypto, error handling, and data protection."
+    },
+    {
+      "name": "OpenFeature Specification",
+      "url": "https://openfeature.dev/specification/",
+      "note": "Useful for modeling reusable feature flag evaluation, provider abstraction, evaluation context, and event-oriented configuration boundaries."
+    },
+    {
+      "name": "AsyncAPI Specification",
+      "url": "https://www.asyncapi.com/docs/reference/specification/v3.0.0",
+      "note": "Useful for event-driven module families such as webhook normalization, event routing, broker manifests, and message contract discovery."
+    },
+    {
+      "name": "CloudEvents",
+      "url": "https://cloudevents.io/",
+      "note": "Useful for normalizing event metadata, portability, and router-friendly event envelopes across integration-heavy systems."
+    }
+  ],
+  "generation_model": {
+    "axes": {
+      "domain": [
+        "auth",
+        "security",
+        "identity",
+        "billing",
+        "storage",
+        "filesystem",
+        "web",
+        "api",
+        "integration",
+        "orchestration",
+        "workflow",
+        "planning",
+        "research",
+        "media",
+        "analysis",
+        "retrieval",
+        "registry",
+        "provenance",
+        "health",
+        "config",
+        "data",
+        "android",
+        "ios",
+        "desktop",
+        "notebook",
+        "ml",
+        "observability",
+        "notifications",
+        "search",
+        "compliance"
+      ],
+      "resource": [
+        "user",
+        "session",
+        "token",
+        "secret",
+        "policy",
+        "entitlement",
+        "upload",
+        "download",
+        "bundle",
+        "manifest",
+        "schema",
+        "document",
+        "dataset",
+        "sample",
+        "image",
+        "audio",
+        "video",
+        "embedding",
+        "model",
+        "run",
+        "job",
+        "event",
+        "queue",
+        "registry",
+        "capability",
+        "prompt",
+        "workflow",
+        "pipeline",
+        "artifact",
+        "result",
+        "report",
+        "tenant",
+        "project",
+        "workspace",
+        "notebook",
+        "message",
+        "email",
+        "payment",
+        "invoice",
+        "webhook"
+      ],
+      "operation": [
+        "create",
+        "issue",
+        "validate",
+        "verify",
+        "sanitize",
+        "normalize",
+        "transform",
+        "classify",
+        "scan",
+        "score",
+        "embed",
+        "recommend",
+        "route",
+        "schedule",
+        "dispatch",
+        "retry",
+        "cancel",
+        "compare",
+        "index",
+        "search",
+        "summarize",
+        "extract",
+        "detect",
+        "judge",
+        "reconcile",
+        "gate",
+        "authorize",
+        "audit",
+        "publish",
+        "hydrate"
+      ],
+      "interface": [
+        "http",
+        "cli",
+        "library",
+        "queue",
+        "webhook",
+        "mcp",
+        "sse",
+        "websocket",
+        "grpc",
+        "local_fs"
+      ],
+      "policy": [
+        "write_scope",
+        "network_scope",
+        "tenant_scope",
+        "quota",
+        "retry",
+        "timeout",
+        "retention",
+        "redaction",
+        "privacy",
+        "approval",
+        "signature",
+        "encryption",
+        "authz",
+        "durability",
+        "idempotency"
+      ],
+      "lifecycle_stage": [
+        "ingest",
+        "validate",
+        "store",
+        "prepare",
+        "execute",
+        "monitor",
+        "review",
+        "publish",
+        "export",
+        "archive"
+      ]
+    },
+    "composition_rule": "A high-value module candidate typically combines one domain, one or more resources, one primary operation, one interface, and explicit policy/lifecycle constraints.",
+    "example_compositions": [
+      "security + token + issue + http + signature + ingest => security.upload_token_issuer",
+      "analysis + pipeline + parse + http + timeout + prepare => analysis.pipeline_manifest_parser",
+      "billing + entitlement + validate + http + quota + execute => billing.entitlement_evaluator",
+      "artifact + bundle + create + http + write_scope + export => artifact.download_bundle_builder"
+    ],
+    "combinatoric_note": "Even a constrained search across 30 domains x 40 resources x 30 operations x 10 interfaces x 15 policy dimensions already implies hundreds of thousands of meaningful candidates before subtype specialization."
+  },
+  "superdomains": [
+    {
+      "name": "Identity And Access",
+      "families": [
+        {
+          "family_id": "identity-token-lifecycle",
+          "description": "Modules for issuing, validating, rotating, scoping, and revoking identity and access credentials.",
+          "seed_candidates": [
+            "auth.oidc_id_token_validator",
+            "security.jwt_claim_validator",
+            "security.upload_token_issuer",
+            "identity.api_key_prefix_resolver",
+            "identity.session_refresh_coordinator",
+            "identity.oauth_consent_recorder",
+            "identity.magic_link_issuer",
+            "identity.service_token_rotator"
+          ]
+        },
+        {
+          "family_id": "authorization-and-fencing",
+          "description": "Modules that decide if actions are allowed and how scopes are enforced.",
+          "seed_candidates": [
+            "security.role_permission_authorizer",
+            "security.tenant_scope_enforcer",
+            "security.resource_ownership_guard",
+            "billing.entitlement_evaluator",
+            "security.write_scope_enforcer",
+            "security.agent_tool_authorizer",
+            "security.policy_decision_adapter"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Storage And File Handling",
+      "families": [
+        {
+          "family_id": "local-file-control",
+          "description": "Modules for safe local file access, path validation, MIME detection, packaging, and audit-safe movement.",
+          "seed_candidates": [
+            "filesystem.safe_file_operator",
+            "filesystem.path_guard",
+            "filesystem.mime_detector",
+            "artifact.download_bundle_builder",
+            "storage.integrity_verifier",
+            "storage.workspace_artifact_store",
+            "storage.retention_policy_evaluator",
+            "filesystem.symlink_escape_detector"
+          ]
+        },
+        {
+          "family_id": "object-storage-and-uploads",
+          "description": "Modules for direct uploads, scans, quotas, storage manifests, lifecycle rules, and export links.",
+          "seed_candidates": [
+            "storage.presigned_upload_gateway",
+            "storage.bio_file_scanner",
+            "storage.object_key_policy_guard",
+            "storage.multipart_upload_coordinator",
+            "storage.storage_quota_accountant",
+            "storage.object_lifecycle_policy_validator",
+            "storage.signed_download_link_issuer"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Web And API Surface",
+      "families": [
+        {
+          "family_id": "request-response-normalization",
+          "description": "Modules that stabilize request shapes, URLs, headers, CORS, and payload semantics.",
+          "seed_candidates": [
+            "web.request_normalizer",
+            "web.url_canonicalizer",
+            "web.cors_policy_analyzer",
+            "api.openapi_manifest_provider",
+            "api.error_shape_normalizer",
+            "api.body_size_policy_guard",
+            "api.pagination_cursor_encoder",
+            "api.idempotency_key_resolver"
+          ]
+        },
+        {
+          "family_id": "agent-facing-api-discovery",
+          "description": "Modules that expose machine-readable capability surfaces for agents and clients.",
+          "seed_candidates": [
+            "agent.capability_manifest_provider",
+            "api.openapi_manifest_provider",
+            "agent.prompt_catalog_provider",
+            "agent.workflow_manifest_provider",
+            "agent.tool_input_schema_registry",
+            "agent.execution_policy_manifest"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Integration And Eventing",
+      "families": [
+        {
+          "family_id": "webhook-boundaries",
+          "description": "Modules for verifying, deduplicating, reconciling, and routing inbound events.",
+          "seed_candidates": [
+            "integration.webhook_signature_verifier",
+            "integration.webhook_event_deduplicator",
+            "billing.payment_reconciliation",
+            "integration.event_replay_guard",
+            "integration.webhook_dead_letter_router",
+            "integration.provider_event_normalizer"
+          ]
+        },
+        {
+          "family_id": "notification-and-delivery",
+          "description": "Modules for email, SMS, push, and workflow notification dispatch.",
+          "seed_candidates": [
+            "integration.email_notification_dispatcher",
+            "notifications.template_renderer",
+            "notifications.delivery_preference_resolver",
+            "notifications.retry_scheduler",
+            "notifications.inbox_event_indexer"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Orchestration And Workflow",
+      "families": [
+        {
+          "family_id": "job-lifecycle",
+          "description": "Modules for queued execution, state transitions, cancellation, retries, and orchestration health.",
+          "seed_candidates": [
+            "orchestration.job_queue_gateway",
+            "workflow.state_transition_manager",
+            "workflow.step_registry_provider",
+            "workflow.tool_broker_authorizer",
+            "workflow.run_cancellation_coordinator",
+            "workflow.retry_policy_evaluator",
+            "workflow.dead_letter_inspector"
+          ]
+        },
+        {
+          "family_id": "planning-and-graphing",
+          "description": "Modules for task planning, graph construction, and dependency analysis.",
+          "seed_candidates": [
+            "planning.task_plan_generator",
+            "registry.module_graph_builder",
+            "workflow.dependency_graph_resolver",
+            "workflow.capability_composer",
+            "workflow.plan_risk_analyzer"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Research And Knowledge Work",
+      "families": [
+        {
+          "family_id": "research-assembly",
+          "description": "Modules for evidence packaging, source scoring, query planning, and structured output review.",
+          "seed_candidates": [
+            "research.evidence_bundle_generator",
+            "research.query_generation_planner",
+            "research.source_reliability_scorer",
+            "research.spec_lint_reviewer",
+            "research.red_team_review_runner",
+            "research.idea_ranking_transformer"
+          ]
+        },
+        {
+          "family_id": "retrieval-augmented-knowledge",
+          "description": "Modules for chunking, embedding, retrieval, and context assembly.",
+          "seed_candidates": [
+            "retrieval.rag_context_builder",
+            "retrieval.document_chunker",
+            "retrieval.embedding_batcher",
+            "retrieval.result_reranker",
+            "retrieval.domain_context_assembler",
+            "retrieval.knowledge_ingest_router"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Media And Human-Centered Quality",
+      "families": [
+        {
+          "family_id": "portrait-and-image-quality",
+          "description": "Modules for image upload judgment, scoring, generation gating, and gallery assembly.",
+          "seed_candidates": [
+            "media.portrait_upload_judge",
+            "media.subject_embedding_updater",
+            "media.preview_generation_dispatcher",
+            "media.portrait_generation_judge",
+            "media.gallery_curation_builder",
+            "media.safe_face_embedding_adapter"
+          ]
+        },
+        {
+          "family_id": "download-and-delivery",
+          "description": "Modules for bundling, redelivery, fulfillment, and user-facing artifact packaging.",
+          "seed_candidates": [
+            "artifact.download_bundle_builder",
+            "artifact.gallery_bundle_manifester",
+            "artifact.fulfillment_order_normalizer",
+            "artifact.delivery_link_regenerator"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Data And Scientific Pipelines",
+      "families": [
+        {
+          "family_id": "pipeline-catalog-and-execution-shape",
+          "description": "Modules for parsing, validating, recommending, and sequencing scientific or computational pipelines.",
+          "seed_candidates": [
+            "analysis.pipeline_manifest_parser",
+            "analysis.pipeline_recommendation_engine",
+            "analysis.samplesheet_generator",
+            "analysis.input_classification_router",
+            "analysis.pipeline_step_resource_estimator",
+            "analysis.run_compare_analyzer"
+          ]
+        },
+        {
+          "family_id": "tabular-and-structured-data",
+          "description": "Modules for parsing, validation, transformation, diffing, and schema enforcement.",
+          "seed_candidates": [
+            "data.csv_table_parser",
+            "validation.json_schema_validator",
+            "data.json_transformer",
+            "data.object_diff_analyzer",
+            "data.schema_drift_detector",
+            "data.samplesheet_validator"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Observability And Operations",
+      "families": [
+        {
+          "family_id": "health-and-readiness",
+          "description": "Modules that expose service status, probe endpoints, and dependency-aware readiness.",
+          "seed_candidates": [
+            "health.probe_endpoint_provider",
+            "health.service_status_reporter",
+            "health.dependency_probe_registry",
+            "health.startup_gate_controller"
+          ]
+        },
+        {
+          "family_id": "audit-and-provenance",
+          "description": "Modules that record evidence, manifests, decisions, and run metadata.",
+          "seed_candidates": [
+            "provenance.run_manifest_generator",
+            "audit.decision_log_writer",
+            "audit.request_trace_correlator",
+            "audit.redaction_safe_event_formatter",
+            "provenance.artifact_lineage_indexer"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Registry And Catalog Systems",
+      "families": [
+        {
+          "family_id": "local-and-offline-registries",
+          "description": "Modules for manifest loading, capability indexing, compatibility matching, and offline discovery.",
+          "seed_candidates": [
+            "registry.local_manifest_registry",
+            "registry.pipeline_catalog_indexer",
+            "registry.capability_match_engine",
+            "registry.version_constraint_resolver",
+            "registry.compatibility_guard"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Platform Configuration",
+      "families": [
+        {
+          "family_id": "env-and-runtime-shaping",
+          "description": "Modules that resolve config, validate secrets, and shape runtime behavior safely.",
+          "seed_candidates": [
+            "config.env_resolver",
+            "config.secret_presence_validator",
+            "config.feature_flag_evaluator",
+            "config.runtime_profile_selector",
+            "config.provider_setting_normalizer",
+            "config.base_url_resolver"
+          ]
+        }
+      ]
+    }
+  ],
+  "harvest_levels": {
+    "level_1_foundational": {
+      "description": "Modules nearly every system needs in some form.",
+      "examples": [
+        "auth token validation",
+        "health probes",
+        "config resolution",
+        "safe file operations",
+        "request normalization",
+        "webhook verification",
+        "run manifests"
+      ]
+    },
+    "level_2_workflow_primitives": {
+      "description": "Modules that coordinate actions and represent common workflow building blocks.",
+      "examples": [
+        "job queue gateway",
+        "upload token issuer",
+        "artifact bundle builder",
+        "local manifest registry",
+        "entitlement evaluator",
+        "pipeline manifest parser"
+      ]
+    },
+    "level_3_domain_specialized": {
+      "description": "Modules that are niche today but portable to future products in the same or adjacent domains.",
+      "examples": [
+        "portrait upload judge",
+        "bio file scanner",
+        "samplesheet generator",
+        "deep link intent analyzer",
+        "research evidence bundle generator"
+      ]
+    }
+  },
+  "operating_principles": [
+    "Every project is a mine for modules, not just a source of repeated infrastructure.",
+    "Every module candidate should be named at the capability level, not the project feature level.",
+    "If a behavior can be separated from product-specific state and branding, it is a module candidate.",
+    "The library should include foundational, workflow, and domain-specialized modules simultaneously.",
+    "The backlog should be driven by taxonomy coverage and source-mining, not only by frequency of repetition."
+  ]
+}

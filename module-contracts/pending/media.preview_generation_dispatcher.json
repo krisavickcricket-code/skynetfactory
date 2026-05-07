@@ -1,0 +1,125 @@
+{
+  "module_id": "media.preview_generation_dispatcher",
+  "version": "0.1.0",
+  "category": "orchestration",
+  "capability_type": "gateway",
+  "purpose": "Dispatch deterministic preview generation jobs for a subject, assign prompt and seed combinations, and persist generated preview records for later review and selection.",
+  "reuse_scope": [
+    "preview gallery pipelines",
+    "creative generation onboarding",
+    "deterministic batch render dispatch",
+    "subject-seeded media flows"
+  ],
+  "language": "python",
+  "runtime": "python3",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/previews/dispatch",
+        "input_schema": "PreviewDispatchRequest",
+        "output_schema": "PreviewDispatchResult",
+        "description": "Generate a deterministic batch of preview jobs for the active subject in a session."
+      }
+    ],
+    "schemas": {
+      "PreviewDispatchRequest": {
+        "type": "object",
+        "required": ["session_id", "subject_id", "preview_count"],
+        "properties": {
+          "session_id": { "type": "string" },
+          "subject_id": { "type": "string" },
+          "preview_count": { "type": "integer" }
+        }
+      },
+      "PreviewDispatchResult": {
+        "type": "object",
+        "required": ["session_id", "preview_count", "generation_ids"],
+        "properties": {
+          "session_id": { "type": "string" },
+          "preview_count": { "type": "integer" },
+          "generation_ids": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "media.preview_generation_dispatcher",
+    "version": "0.1.0",
+    "purpose": "Dispatch preview generation batches with deterministic prompt and seed assignment.",
+    "agent_usage": {
+      "when_to_use": "Use after a subject embedding exists and the workflow is ready to show users an initial preview set.",
+      "when_not_to_use": "Do not use for final high-resolution fulfillment renders, unconstrained text-to-image generation, or gallery packaging.",
+      "example_workflow": "1) Verify the session is in preview-ready state. 2) Call /previews/dispatch with session and subject ids. 3) Store the generated preview identifiers for listing and selection."
+    },
+    "common_calls": [
+      {
+        "description": "Dispatch six deterministic previews",
+        "method": "POST",
+        "path_or_command": "/api/v1/previews/dispatch",
+        "input_example": { "session_id": "sess_123", "subject_id": "subj_123", "preview_count": 6 },
+        "output_example": { "session_id": "sess_123", "preview_count": 6, "generation_ids": ["gen_1", "gen_2"] }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Session is not in the previewing state or there is no subject to render",
+        "symptom": "409 or 400 dispatch rejection",
+        "recovery": "Advance the workflow into preview-ready state and ensure a subject record exists before dispatching previews",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["preview", "generation", "dispatch", "media", "gateway"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Gate on explicit session state, enumerate preview prompt ids deterministically, derive repeatable seeds, call an injected inference provider, and persist generation records marked as previews.",
+    "known_gotchas": "Preview batches become hard to debug when prompt ids or seed assignment drift, and empty subject lists should fail fast before any generation work begins.",
+    "preferred_approach": "Keep prompt selection and image generation provider calls separate so preview catalog changes do not break persistence logic.",
+    "avoid_approach": "Do not infer workflow state from loosely coupled side effects and do not mix preview dispatch with checkout or download bundling."
+  },
+  "test_cases": [
+    {
+      "name": "reject when session is not previewing",
+      "input": { "method": "POST", "path": "/previews/dispatch", "body": { "session_id": "sess_123", "subject_id": "subj_123", "preview_count": 6, "session_status": "created" } },
+      "expected_status": 409
+    }
+  ]
+}

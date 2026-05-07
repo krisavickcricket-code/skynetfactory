@@ -1,0 +1,141 @@
+{
+  "module_id": "workflow.step_registry_provider",
+  "version": "0.1.0",
+  "category": "data",
+  "capability_type": "provider",
+  "purpose": "Provide a validated registry of workflow step definitions, capabilities, and dependency metadata so orchestrators can discover executable steps without hardcoding them.",
+  "reuse_scope": [
+    "workflow compilers",
+    "agent step catalogs",
+    "offline orchestration registries",
+    "modular execution planners"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/workflow/steps",
+        "output_schema": "StepRegistryResult",
+        "description": "List all registered workflow steps and their execution metadata."
+      },
+      {
+        "method": "POST",
+        "path": "/workflow/steps/resolve",
+        "input_schema": "StepResolveRequest",
+        "output_schema": "StepResolveResult",
+        "description": "Resolve one workflow step by key or capability."
+      }
+    ],
+    "schemas": {
+      "StepRegistryResult": {
+        "type": "object",
+        "required": ["steps"],
+        "properties": {
+          "steps": { "type": "array", "items": { "type": "object" } }
+        }
+      },
+      "StepResolveRequest": {
+        "type": "object",
+        "required": ["step_key"],
+        "properties": {
+          "step_key": { "type": "string" }
+        }
+      },
+      "StepResolveResult": {
+        "type": "object",
+        "required": ["step"],
+        "properties": {
+          "step": { "type": "object" }
+        }
+      }
+    }
+  },
+  "dependencies": [
+    {
+      "module_id": "registry.local_manifest_registry",
+      "version_constraint": ">=0.1.0",
+      "purpose": "Load and validate local step manifest files backing the registry",
+      "required_at": "runtime"
+    }
+  ],
+  "sidecar_specification": {
+    "module_id": "workflow.step_registry_provider",
+    "version": "0.1.0",
+    "purpose": "Registry provider for discoverable workflow step definitions.",
+    "agent_usage": {
+      "when_to_use": "Use when an orchestrator or planner needs to discover workflow steps by key, capability, or manifest metadata.",
+      "when_not_to_use": "Do not use as a distributed scheduler, event bus, or arbitrary package repository.",
+      "example_workflow": "1) Load step manifests into a local registry. 2) List or resolve steps through /workflow/steps. 3) Hand the selected step metadata to the workflow engine."
+    },
+    "common_calls": [
+      {
+        "description": "Resolve a workflow step by key",
+        "method": "POST",
+        "path_or_command": "/api/v1/workflow/steps/resolve",
+        "input_example": { "step_key": "query_generator" },
+        "output_example": { "step": { "step_key": "query_generator", "capabilities": ["research.query_generation"] } }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Requested step key does not exist in the loaded registry",
+        "symptom": "404 resolution failure",
+        "recovery": "Load the correct step manifest set or request an existing step key",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["workflow", "steps", "registry", "catalog", "provider"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Load step manifest files through a registry abstraction, index them by key and capability, and expose lookup functions that return typed metadata rather than raw file contents.",
+    "known_gotchas": "Step registries drift when duplicate keys or invalid manifests are silently accepted, so validate aggressively before exposing the registry to planners.",
+    "preferred_approach": "Keep manifest loading and step resolution separate so the provider can be reused by both HTTP APIs and in-process planners.",
+    "avoid_approach": "Do not embed execution side effects or queue submission inside the registry provider."
+  },
+  "test_cases": [
+    {
+      "name": "resolve known step",
+      "input": { "method": "POST", "path": "/workflow/steps/resolve", "body": { "step_key": "query_generator" } },
+      "expected_status": 200
+    }
+  ]
+}

@@ -1,0 +1,134 @@
+{
+  "module_id": "research.query_generation_planner",
+  "version": "0.1.0",
+  "category": "research",
+  "capability_type": "generator",
+  "purpose": "Generate structured research queries from a normalized user intent so downstream search, evidence extraction, and review stages can operate on explicit question variants instead of raw prose.",
+  "reuse_scope": [
+    "research copilots",
+    "evidence gathering workflows",
+    "RAG query planning",
+    "spec discovery assistants"
+  ],
+  "language": "python",
+  "runtime": "python3",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/research/queries/generate",
+        "input_schema": "ResearchQueryRequest",
+        "output_schema": "ResearchQueryResult",
+        "description": "Expand a normalized request into ranked search queries with intent labels and optional constraints."
+      }
+    ],
+    "schemas": {
+      "ResearchQueryRequest": {
+        "type": "object",
+        "required": ["request_text"],
+        "properties": {
+          "request_text": { "type": "string" },
+          "intent": { "type": "string" },
+          "constraints": { "type": "object" }
+        }
+      },
+      "ResearchQueryResult": {
+        "type": "object",
+        "required": ["queries"],
+        "properties": {
+          "queries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["text", "intent_label"],
+              "properties": {
+                "text": { "type": "string" },
+                "intent_label": { "type": "string" },
+                "priority": { "type": "integer" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "research.query_generation_planner",
+    "version": "0.1.0",
+    "purpose": "Generate structured search queries from normalized research intent.",
+    "agent_usage": {
+      "when_to_use": "Use after intent normalization and before controlled search, retrieval, or evidence extraction steps.",
+      "when_not_to_use": "Do not use as a web browser, citation formatter, or final answer generator.",
+      "example_workflow": "1) Normalize the user request. 2) Call /research/queries/generate. 3) Pass the ranked query set into a controlled search or retrieval boundary."
+    },
+    "common_calls": [
+      {
+        "description": "Generate search queries for a research task",
+        "method": "POST",
+        "path_or_command": "/api/v1/research/queries/generate",
+        "input_example": { "request_text": "Find recent evidence for strict schema validation in agent tool brokers", "intent": "evidence_gathering" },
+        "output_example": { "queries": [{ "text": "agent tool broker schema validation evidence", "intent_label": "primary", "priority": 1 }] }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Input request is too vague to generate differentiated query variants",
+        "symptom": "Low-diversity queries or explicit validation rejection",
+        "recovery": "Add missing subject, timeframe, or evidence-type constraints before retrying",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["research", "query", "planning", "retrieval", "generator"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Accept normalized intent fields, generate multiple query rewrites with explicit labels such as primary, supporting, and risk-check, and keep the output structured enough for deterministic downstream consumption.",
+    "known_gotchas": "Query generation tends to leak into actual search or summarization; keep it as a pure planning stage so downstream tools remain separately testable.",
+    "preferred_approach": "Use typed query objects with priority ordering and optional constraints rather than returning one concatenated string.",
+    "avoid_approach": "Do not fetch sources or synthesize evidence inside the planner."
+  },
+  "test_cases": [
+    {
+      "name": "generates multiple labeled queries",
+      "input": { "method": "POST", "path": "/research/queries/generate", "body": { "request_text": "Find recent evidence for strict schema validation in agent tool brokers", "intent": "evidence_gathering" } },
+      "expected_status": 200
+    }
+  ]
+}

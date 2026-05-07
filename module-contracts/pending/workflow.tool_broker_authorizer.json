@@ -1,0 +1,132 @@
+{
+  "module_id": "workflow.tool_broker_authorizer",
+  "version": "0.1.0",
+  "category": "security",
+  "capability_type": "validator",
+  "purpose": "Authorize tool invocations against role policy, tool allowlists, and schema-constrained arguments so workflow agents can only execute approved capabilities.",
+  "reuse_scope": [
+    "agent tool brokers",
+    "workflow execution gates",
+    "plugin authorization boundaries",
+    "sandboxed automation systems"
+  ],
+  "language": "python",
+  "runtime": "python3",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/tool-broker/authorize",
+        "input_schema": "ToolAuthorizationRequest",
+        "output_schema": "ToolAuthorizationResult",
+        "description": "Authorize a tool call for a specific role and validated argument payload."
+      }
+    ],
+    "schemas": {
+      "ToolAuthorizationRequest": {
+        "type": "object",
+        "required": ["role", "tool_name", "arguments"],
+        "properties": {
+          "role": { "type": "string" },
+          "tool_name": { "type": "string" },
+          "arguments": { "type": "object" }
+        }
+      },
+      "ToolAuthorizationResult": {
+        "type": "object",
+        "required": ["allowed"],
+        "properties": {
+          "allowed": { "type": "boolean" },
+          "reason": { "type": "string" }
+        }
+      }
+    }
+  },
+  "dependencies": [
+    {
+      "module_id": "validation.json_schema_validator",
+      "version_constraint": ">=0.1.0",
+      "purpose": "Validate tool arguments against declared input schema before authorization completes",
+      "required_at": "runtime"
+    }
+  ],
+  "sidecar_specification": {
+    "module_id": "workflow.tool_broker_authorizer",
+    "version": "0.1.0",
+    "purpose": "Authorize tool broker calls against role policy and input schema constraints.",
+    "agent_usage": {
+      "when_to_use": "Use before invoking any external or internal tool through a brokered workflow boundary.",
+      "when_not_to_use": "Do not use as the actual tool runner, rate limiter, or audit log writer.",
+      "example_workflow": "1) Receive role, tool name, and argument payload. 2) Validate the arguments. 3) Approve only when the role and policy allow the tool invocation."
+    },
+    "common_calls": [
+      {
+        "description": "Authorize a research search tool call",
+        "method": "POST",
+        "path_or_command": "/api/v1/tool-broker/authorize",
+        "input_example": { "role": "researcher", "tool_name": "search_web", "arguments": { "query": "schema validation" } },
+        "output_example": { "allowed": true, "reason": "role and schema approved" }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Role is not permitted, tool is disallowed, or arguments fail schema validation",
+        "symptom": "allowed false with a specific reason",
+        "recovery": "Use an authorized role, fix the payload, or select an allowed tool",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["workflow", "tool-broker", "authorization", "policy", "validator"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Model authorization as a pure decision over role, tool metadata, and schema-validated arguments, with clear denial reasons for unauthorized role, forbidden tool, or invalid payload.",
+    "known_gotchas": "If schema validation runs after authorization side effects, denials become ambiguous and unsafe. Validate arguments before approval leaves the broker boundary.",
+    "preferred_approach": "Use explicit allowlists per role and keep tool metadata separate from execution code.",
+    "avoid_approach": "Do not invoke the tool speculatively before authorization completes and do not hide denials behind generic errors."
+  },
+  "test_cases": [
+    {
+      "name": "reject unauthorized role",
+      "input": { "method": "POST", "path": "/tool-broker/authorize", "body": { "role": "viewer", "tool_name": "filesystem_write", "arguments": { "path": "/tmp/x" } } },
+      "expected_status": 200,
+      "expected_body": { "allowed": false, "reason": "unauthorized_role" }
+    }
+  ]
+}

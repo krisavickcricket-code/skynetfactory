@@ -1,0 +1,141 @@
+{
+  "module_id": "analysis.pipeline_recommendation_engine",
+  "version": "0.1.0",
+  "category": "processing",
+  "capability_type": "provider",
+  "purpose": "Recommend ranked analysis workflows from domain guidance, input evidence, and research intent so users or agents can start from plausible pipeline candidates instead of a blank slate.",
+  "reuse_scope": [
+    "scientific workflow discovery",
+    "domain-guided analysis planning",
+    "pipeline suggestion assistants",
+    "research intake triage"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/pipelines/recommend",
+        "input_schema": "PipelineRecommendationRequest",
+        "output_schema": "PipelineRecommendationResult",
+        "description": "Rank candidate workflows for a research question, modality set, or domain-specific analysis request."
+      }
+    ],
+    "schemas": {
+      "PipelineRecommendationRequest": {
+        "type": "object",
+        "required": ["query"],
+        "properties": {
+          "query": { "type": "string" },
+          "domain": { "type": "string" },
+          "modalities": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "PipelineRecommendationResult": {
+        "type": "object",
+        "required": ["recommendations"],
+        "properties": {
+          "recommendations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["workflow_id", "score"],
+              "properties": {
+                "workflow_id": { "type": "string" },
+                "score": { "type": "number" },
+                "rationale": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "dependencies": [
+    {
+      "module_id": "analysis.pipeline_manifest_parser",
+      "version_constraint": ">=0.1.0",
+      "purpose": "Validate and normalize candidate pipeline metadata before recommendation output",
+      "required_at": "runtime"
+    }
+  ],
+  "sidecar_specification": {
+    "module_id": "analysis.pipeline_recommendation_engine",
+    "version": "0.1.0",
+    "purpose": "Rank candidate scientific workflows against user goals, modalities, and domain hints.",
+    "agent_usage": {
+      "when_to_use": "Use when a research request needs one or more plausible workflow starting points chosen from a curated domain catalog.",
+      "when_not_to_use": "Do not use as a job executor, variant caller, or generic search engine over arbitrary web content.",
+      "example_workflow": "1) Provide a research question and optional modalities. 2) Call /pipelines/recommend. 3) Use the ranked workflow ids and rationale in a planning or orchestration step."
+    },
+    "common_calls": [
+      {
+        "description": "Recommend workflows for a neuroscience question",
+        "method": "POST",
+        "path_or_command": "/api/v1/pipelines/recommend",
+        "input_example": { "query": "I have scRNA-seq from brain organoids and want to characterize cell types", "domain": "neuroscience", "modalities": ["scrna_seq"] },
+        "output_example": { "recommendations": [{ "workflow_id": "scanpy", "score": 0.94, "rationale": "Matches scRNA-seq cell typing intent" }] }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "No catalog entries match the requested domain or modality constraints",
+        "symptom": "Empty recommendations array or explicit no-match response",
+        "recovery": "Broaden the request, add fallback domain guidance, or enrich the catalog",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["pipeline", "recommendation", "research", "catalog", "provider"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Load curated guidance records, match on domain and modality features, score workflow candidates against the request, and return rationale grounded in the matched evidence fields.",
+    "known_gotchas": "Catalog guidance often mixes workflow ids, tool names, and explanatory text, so normalize these before ranking or you will produce duplicate or noisy recommendations.",
+    "preferred_approach": "Treat recommendation as a deterministic ranking over a local catalog with explainable feature matches.",
+    "avoid_approach": "Do not call external LLMs or execute any pipeline steps from the recommendation engine."
+  },
+  "test_cases": [
+    {
+      "name": "returns neuroscience workflow match for organoid cell typing",
+      "input": { "method": "POST", "path": "/pipelines/recommend", "body": { "query": "I have scRNA-seq from brain organoids and want to characterize cell types", "domain": "neuroscience", "modalities": ["scrna_seq"] } },
+      "expected_status": 200
+    }
+  ]
+}
