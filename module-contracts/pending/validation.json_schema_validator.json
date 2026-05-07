@@ -1,0 +1,166 @@
+{
+  "module_id": "validation.json_schema_validator",
+  "version": "0.1.0",
+  "category": "validation",
+  "capability_type": "validator",
+  "purpose": "Validate JSON payloads against supplied JSON Schema documents and return deterministic, structured validation errors for API and configuration boundaries.",
+  "reuse_scope": [
+    "REST API request validation",
+    "configuration file validation",
+    "mobile sync payload checks",
+    "test fixture contract checks"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/validate",
+        "input_schema": "ValidateRequest",
+        "output_schema": "ValidateResult",
+        "description": "Validate a JSON value against a JSON Schema document supplied in the request."
+      }
+    ],
+    "schemas": {
+      "ValidateRequest": {
+        "type": "object",
+        "required": ["schema", "data"],
+        "properties": {
+          "schema": { "type": "object" },
+          "data": {},
+          "all_errors": { "type": "boolean" }
+        }
+      },
+      "ValidateResult": {
+        "type": "object",
+        "required": ["valid", "errors"],
+        "properties": {
+          "valid": { "type": "boolean" },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["path", "message", "keyword"],
+              "properties": {
+                "path": { "type": "string" },
+                "message": { "type": "string" },
+                "keyword": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "dependencies": [
+    {
+      "module_id": "npm:ajv",
+      "version_constraint": "^8.17.0",
+      "purpose": "Compile and evaluate JSON Schema draft 2020-12 validation rules",
+      "required_at": "runtime"
+    },
+    {
+      "module_id": "npm:ajv-formats",
+      "version_constraint": "^3.0.1",
+      "purpose": "Validate standard JSON Schema string formats such as email and uri",
+      "required_at": "runtime"
+    }
+  ],
+  "sidecar_specification": {
+    "module_id": "validation.json_schema_validator",
+    "version": "0.1.0",
+    "purpose": "JSON Schema validation service for untrusted payloads and configuration objects.",
+    "agent_usage": {
+      "when_to_use": "Use when a caller has a JSON Schema and needs a payload checked before further processing.",
+      "when_not_to_use": "Do not use for semantic business validation, database uniqueness checks, or schemas that require external remote references.",
+      "example_workflow": "1) Build a local JSON Schema object. 2) Submit schema and data to /validate. 3) If valid is false, return errors to the caller or remediation agent."
+    },
+    "common_calls": [
+      {
+        "description": "Validate a user payload",
+        "method": "POST",
+        "path_or_command": "/api/v1/validate",
+        "input_example": { "schema": { "type": "object", "required": ["email"], "properties": { "email": { "type": "string", "format": "email" } } }, "data": { "email": "a@example.com" } },
+        "output_example": { "valid": true, "errors": [] }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Schema is malformed or unsupported",
+        "symptom": "400 error with schema_compile_failed code",
+        "recovery": "Fix the schema document before retrying validation",
+        "severity": "permanent"
+      },
+      {
+        "condition": "Payload violates schema",
+        "symptom": "200 response with valid false and errors array",
+        "recovery": "Correct the payload fields listed in errors",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["validation", "json-schema", "api-boundary", "configuration", "payload"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    },
+    {
+      "description": "Must not fetch remote JSON Schema references",
+      "detection_method": "network_egress_check",
+      "severity": "critical"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Use Ajv from ajv/dist/2020.js with allErrors controlled by the request. Add ajv-formats locally. Compile the supplied schema per request or cache by stable JSON string hash. Return Ajv errors mapped to { path: instancePath || '/', message, keyword }.",
+    "known_gotchas": "Remote $ref values can trigger unsafe assumptions if loadSchema is enabled. Keep validation synchronous and do not configure remote schema loading.",
+    "preferred_approach": "Use Ajv validate(data) and map validate.errors without throwing for normal validation failures.",
+    "avoid_approach": "Do not use eval, do not mutate the input payload, and do not resolve schemas over HTTP."
+  },
+  "test_cases": [
+    {
+      "name": "valid object passes",
+      "input": { "method": "POST", "path": "/validate", "body": { "schema": { "type": "object", "required": ["id"], "properties": { "id": { "type": "string" } } }, "data": { "id": "abc" } } },
+      "expected_status": 200,
+      "expected_body": { "valid": true, "errors": [] }
+    },
+    {
+      "name": "missing required field fails",
+      "input": { "method": "POST", "path": "/validate", "body": { "schema": { "type": "object", "required": ["id"] }, "data": {} } },
+      "expected_status": 200,
+      "expected_body": { "valid": false }
+    }
+  ]
+}

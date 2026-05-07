@@ -1,0 +1,156 @@
+{
+  "module_id": "security.jwt_claim_validator",
+  "version": "0.1.0",
+  "category": "security",
+  "capability_type": "validator",
+  "purpose": "Validate JWT signatures and registered claims using caller-supplied keys and policy constraints without fetching remote key material.",
+  "reuse_scope": [
+    "API gateway token checks",
+    "mobile backend authentication tests",
+    "local service authorization",
+    "integration test token validation"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/jwt/validate",
+        "input_schema": "JwtValidateRequest",
+        "output_schema": "JwtValidateResult",
+        "description": "Validate a JWT against supplied key material and expected claim policy."
+      }
+    ],
+    "schemas": {
+      "JwtValidateRequest": {
+        "type": "object",
+        "required": ["token", "key", "algorithms"],
+        "properties": {
+          "token": { "type": "string" },
+          "key": { "type": "object" },
+          "algorithms": { "type": "array", "items": { "type": "string" } },
+          "issuer": { "type": "string" },
+          "audience": { "type": "string" },
+          "clock_tolerance_seconds": { "type": "integer" }
+        }
+      },
+      "JwtValidateResult": {
+        "type": "object",
+        "required": ["valid", "claims", "errors"],
+        "properties": {
+          "valid": { "type": "boolean" },
+          "claims": { "type": "object" },
+          "errors": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  },
+  "dependencies": [
+    {
+      "module_id": "npm:jose",
+      "version_constraint": "^5.9.0",
+      "purpose": "Perform standards-compliant JWT signature and claim verification",
+      "required_at": "runtime"
+    }
+  ],
+  "sidecar_specification": {
+    "module_id": "security.jwt_claim_validator",
+    "version": "0.1.0",
+    "purpose": "Local JWT signature and claim validation using supplied keys.",
+    "agent_usage": {
+      "when_to_use": "Use when an API, gateway, or test harness needs to validate a JWT with key material already provided by the caller.",
+      "when_not_to_use": "Do not use when the module must fetch JWKS from a remote identity provider or manage authentication sessions.",
+      "example_workflow": "1) Load trusted public key or JWK from configuration. 2) Submit token, key, algorithms, issuer, and audience to /jwt/validate. 3) Use valid and claims in downstream policy checks."
+    },
+    "common_calls": [
+      {
+        "description": "Validate token with a supplied JWK",
+        "method": "POST",
+        "path_or_command": "/api/v1/jwt/validate",
+        "input_example": { "token": "eyJhbGciOi...", "key": { "kty": "oct", "k": "secret" }, "algorithms": ["HS256"], "issuer": "issuer-a", "audience": "api-a" },
+        "output_example": { "valid": true, "claims": { "iss": "issuer-a", "aud": "api-a", "sub": "user-1" }, "errors": [] }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Signature verification fails",
+        "symptom": "200 response with valid false and signature error",
+        "recovery": "Use the correct key and allowed algorithm for the token",
+        "severity": "permanent"
+      },
+      {
+        "condition": "Token is expired or not yet valid",
+        "symptom": "200 response with valid false and time claim error",
+        "recovery": "Refresh the token or adjust clock tolerance when appropriate",
+        "severity": "transient"
+      }
+    ],
+    "composition_tags": ["security", "jwt", "claims", "auth", "validator"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    },
+    {
+      "description": "Must not accept tokens signed with none algorithm",
+      "detection_method": "static_analysis",
+      "severity": "critical",
+      "static_analysis_config": {
+        "tool": "eslint",
+        "rules": ["no-restricted-syntax"]
+      }
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Use jose jwtVerify with a key imported from supplied JWK or secret bytes. Pass algorithms, issuer, audience, and clockTolerance from the request. Catch errors and return valid false with errors rather than throwing 500 for invalid tokens.",
+    "known_gotchas": "Algorithm confusion is possible if algorithms are not explicitly provided. Do not trust the token header to select verification behavior.",
+    "preferred_approach": "Require an explicit algorithms array and reject none, empty arrays, or algorithms not supported by jose.",
+    "avoid_approach": "Do not decode without verifying, do not fetch remote JWKS, and do not store tokens or keys."
+  },
+  "test_cases": [
+    {
+      "name": "valid signed token passes",
+      "input": { "method": "POST", "path": "/jwt/validate", "body": { "token": "generated-test-token", "key": { "kty": "oct", "k": "generated-test-secret" }, "algorithms": ["HS256"], "issuer": "test", "audience": "api" } },
+      "expected_status": 200,
+      "expected_body": { "valid": true }
+    },
+    {
+      "name": "none algorithm rejected",
+      "input": { "method": "POST", "path": "/jwt/validate", "body": { "token": "none-token", "key": {}, "algorithms": ["none"] } },
+      "expected_status": 400
+    }
+  ]
+}

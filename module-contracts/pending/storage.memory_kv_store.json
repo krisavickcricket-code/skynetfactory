@@ -1,0 +1,172 @@
+{
+  "module_id": "storage.memory_kv_store",
+  "version": "0.1.0",
+  "category": "storage",
+  "capability_type": "provider",
+  "purpose": "Provide an in-memory key-value store with optional TTL for application state, tests, sessions, and temporary computed results.",
+  "reuse_scope": [
+    "session state prototypes",
+    "temporary cache layers",
+    "unit test fixtures",
+    "agent workflow scratchpads"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "PUT",
+        "path": "/kv/{key}",
+        "input_schema": "SetValueRequest",
+        "output_schema": "SetValueResult",
+        "description": "Set a JSON value for a key with an optional TTL in seconds."
+      },
+      {
+        "method": "GET",
+        "path": "/kv/{key}",
+        "output_schema": "GetValueResult",
+        "description": "Retrieve a JSON value for a key when present and not expired."
+      },
+      {
+        "method": "DELETE",
+        "path": "/kv/{key}",
+        "output_schema": "DeleteValueResult",
+        "description": "Delete one key from the in-memory store."
+      }
+    ],
+    "schemas": {
+      "SetValueRequest": {
+        "type": "object",
+        "required": ["value"],
+        "properties": {
+          "value": {},
+          "ttl_seconds": { "type": "integer" }
+        }
+      },
+      "SetValueResult": {
+        "type": "object",
+        "required": ["stored", "key"],
+        "properties": {
+          "stored": { "type": "boolean" },
+          "key": { "type": "string" },
+          "expires_at": { "type": "string" }
+        }
+      },
+      "GetValueResult": {
+        "type": "object",
+        "required": ["key", "found"],
+        "properties": {
+          "key": { "type": "string" },
+          "found": { "type": "boolean" },
+          "value": {},
+          "expires_at": { "type": "string" }
+        }
+      },
+      "DeleteValueResult": {
+        "type": "object",
+        "required": ["key", "deleted"],
+        "properties": {
+          "key": { "type": "string" },
+          "deleted": { "type": "boolean" }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "storage.memory_kv_store",
+    "version": "0.1.0",
+    "purpose": "Ephemeral JSON key-value storage with TTL support.",
+    "agent_usage": {
+      "when_to_use": "Use for temporary state, cache entries, fixtures, and workflow scratch data that can be lost on process restart.",
+      "when_not_to_use": "Do not use when data must survive restarts, requires relational queries, or needs cross-process consistency.",
+      "example_workflow": "1) PUT /kv/{key} with value and optional ttl_seconds. 2) GET /kv/{key} during the same process lifetime. 3) DELETE when the value is no longer needed."
+    },
+    "common_calls": [
+      {
+        "description": "Store a temporary session value",
+        "method": "PUT",
+        "path_or_command": "/api/v1/kv/session-123",
+        "input_example": { "value": { "user_id": "u1" }, "ttl_seconds": 300 },
+        "output_example": { "stored": true, "key": "session-123" }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Key has expired",
+        "symptom": "GET returns found false or 404 depending on route convention",
+        "recovery": "Recompute or store the value again",
+        "severity": "transient"
+      },
+      {
+        "condition": "Process restarts",
+        "symptom": "Previously stored keys are gone",
+        "recovery": "Use a persistent storage module when durability is required",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["storage", "cache", "ttl", "memory", "state"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    },
+    {
+      "description": "Must not persist values to disk",
+      "detection_method": "filesystem_mutation_diff",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Use a Map<string, { value: unknown; expiresAt: number | null }>. On get, delete expired entries before responding. Use setInterval with unref() to sweep expired entries every 60 seconds.",
+    "known_gotchas": "TTL math should use Date.now() milliseconds and reject negative ttl_seconds. Stored objects should be cloned on set and get to avoid mutation through references.",
+    "preferred_approach": "Create a MemoryKvStore class with set, get, delete, and sweepExpired methods and test it independently from HTTP routes.",
+    "avoid_approach": "Do not use Redis, SQLite, local files, or process-global variables outside a single store instance."
+  },
+  "test_cases": [
+    {
+      "name": "set and get value",
+      "input": { "method": "PUT", "path": "/kv/user", "body": { "value": { "id": "u1" }, "ttl_seconds": 60 } },
+      "expected_status": 200,
+      "expected_body": { "stored": true, "key": "user" }
+    },
+    {
+      "name": "expired value is missing",
+      "input": { "method": "GET", "path": "/kv/expired" },
+      "expected_status": 404,
+      "notes": "Test should create an expired entry before reading."
+    }
+  ]
+}

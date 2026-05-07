@@ -1,0 +1,158 @@
+{
+  "module_id": "data.json_transformer",
+  "version": "0.1.0",
+  "category": "processing",
+  "capability_type": "transformer",
+  "purpose": "Transform JSON objects and arrays with a declarative pipeline for common pick, omit, rename, flatten, default, and filter operations.",
+  "reuse_scope": [
+    "API response normalization",
+    "mobile sync preprocessing",
+    "ETL pipeline steps",
+    "test data shaping"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/transform",
+        "input_schema": "TransformRequest",
+        "output_schema": "TransformResult",
+        "description": "Apply a declarative transformation pipeline to JSON-compatible data."
+      }
+    ],
+    "schemas": {
+      "TransformRequest": {
+        "type": "object",
+        "required": ["data", "pipeline"],
+        "properties": {
+          "data": {},
+          "pipeline": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["op"],
+              "properties": {
+                "op": { "type": "string", "enum": ["pick", "omit", "rename", "flatten", "defaults", "filter_equals"] },
+                "fields": { "type": "array", "items": { "type": "string" } },
+                "mapping": { "type": "object" },
+                "values": { "type": "object" },
+                "path": { "type": "string" },
+                "equals": {}
+              }
+            }
+          }
+        }
+      },
+      "TransformResult": {
+        "type": "object",
+        "required": ["data", "applied_operations"],
+        "properties": {
+          "data": {},
+          "applied_operations": { "type": "integer" }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "data.json_transformer",
+    "version": "0.1.0",
+    "purpose": "Declarative JSON-to-JSON transformation for reusable data shaping.",
+    "agent_usage": {
+      "when_to_use": "Use when an agent needs predictable structural changes to JSON data without writing custom imperative code.",
+      "when_not_to_use": "Do not use for arbitrary JavaScript execution, database joins, complex business rules, or unbounded recursive transformations.",
+      "example_workflow": "1) Normalize input through validation.json_schema_validator. 2) Submit data and pipeline to /transform. 3) Pass transformed data to storage or API modules."
+    },
+    "common_calls": [
+      {
+        "description": "Pick and rename fields",
+        "method": "POST",
+        "path_or_command": "/api/v1/transform",
+        "input_example": { "data": { "name": "Ada", "email": "ada@example.com", "age": 36 }, "pipeline": [{ "op": "pick", "fields": ["name", "email"] }, { "op": "rename", "mapping": { "email": "contact" } }] },
+        "output_example": { "data": { "name": "Ada", "contact": "ada@example.com" }, "applied_operations": 2 }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Pipeline operation is unknown",
+        "symptom": "400 error naming the unsupported operation",
+        "recovery": "Use only documented operation names",
+        "severity": "permanent"
+      },
+      {
+        "condition": "Field path does not exist",
+        "symptom": "Operation omits missing field or reports field_missing depending on operation",
+        "recovery": "Validate source shape or add defaults before reading the field",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["json", "transformer", "etl", "normalization", "pipeline"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    },
+    {
+      "description": "Must not execute arbitrary expressions from pipeline input",
+      "detection_method": "static_analysis",
+      "severity": "critical",
+      "static_analysis_config": {
+        "tool": "eslint",
+        "rules": ["no-eval", "no-new-func", "no-implied-eval"]
+      }
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Implement pure functions for pick, omit, rename, flatten, defaults, and filter_equals. Use safe getPath/setPath helpers that split dot paths and reject empty segments, __proto__, prototype, and constructor.",
+    "known_gotchas": "Prototype pollution is possible if path segments are assigned directly. Arrays and null values need explicit handling for filter_equals and flatten.",
+    "preferred_approach": "Run pipeline.reduce with structured operation objects and return a deep cloned result for every step.",
+    "avoid_approach": "Do not accept JavaScript function strings, do not use eval, and do not mutate request.data in place."
+  },
+  "test_cases": [
+    {
+      "name": "pick and rename object fields",
+      "input": { "method": "POST", "path": "/transform", "body": { "data": { "a": 1, "b": 2 }, "pipeline": [{ "op": "pick", "fields": ["a"] }, { "op": "rename", "mapping": { "a": "alpha" } }] } },
+      "expected_status": 200,
+      "expected_body": { "data": { "alpha": 1 }, "applied_operations": 2 }
+    },
+    {
+      "name": "reject expression pipeline",
+      "input": { "method": "POST", "path": "/transform", "body": { "data": { "a": 1 }, "pipeline": [{ "op": "map", "fn": "x => x * 2" }] } },
+      "expected_status": 400
+    }
+  ]
+}

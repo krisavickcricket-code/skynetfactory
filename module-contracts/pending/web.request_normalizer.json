@@ -1,0 +1,148 @@
+{
+  "module_id": "web.request_normalizer",
+  "version": "0.1.0",
+  "category": "networking",
+  "capability_type": "transformer",
+  "purpose": "Normalize HTTP request descriptors into canonical method, URL, header, query, body, and client metadata for web applications and gateways.",
+  "reuse_scope": [
+    "web gateway preprocessing",
+    "API request logging",
+    "test harness request fixtures",
+    "mobile backend adapters"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/requests/normalize",
+        "input_schema": "NormalizeRequest",
+        "output_schema": "NormalizedRequest",
+        "description": "Normalize an HTTP request descriptor without sending it over the network."
+      }
+    ],
+    "schemas": {
+      "NormalizeRequest": {
+        "type": "object",
+        "required": ["method", "url"],
+        "properties": {
+          "method": { "type": "string" },
+          "url": { "type": "string" },
+          "headers": { "type": "object" },
+          "body": {},
+          "client_ip": { "type": "string" }
+        }
+      },
+      "NormalizedRequest": {
+        "type": "object",
+        "required": ["method", "url", "path", "query", "headers"],
+        "properties": {
+          "method": { "type": "string" },
+          "url": { "type": "string" },
+          "path": { "type": "string" },
+          "query": { "type": "object" },
+          "headers": { "type": "object" },
+          "body": {},
+          "client_ip": { "type": "string" }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "web.request_normalizer",
+    "version": "0.1.0",
+    "purpose": "Canonicalize HTTP request descriptors for repeatable downstream processing.",
+    "agent_usage": {
+      "when_to_use": "Use before routing, logging, signing, test comparison, or gateway policy checks that need stable request shape.",
+      "when_not_to_use": "Do not use to perform actual HTTP requests, enforce authentication, or apply rate limiting.",
+      "example_workflow": "1) Capture incoming request metadata. 2) Call /requests/normalize. 3) Pass the normalized descriptor to validators, analyzers, or gateways."
+    },
+    "common_calls": [
+      {
+        "description": "Normalize a web request descriptor",
+        "method": "POST",
+        "path_or_command": "/api/v1/requests/normalize",
+        "input_example": { "method": "get", "url": "https://example.com/items?a=1", "headers": { "Content-Type": "application/json" } },
+        "output_example": { "method": "GET", "url": "https://example.com/items?a=1", "path": "/items", "query": { "a": "1" }, "headers": { "content-type": "application/json" } }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "URL cannot be parsed",
+        "symptom": "400 error with invalid_url code",
+        "recovery": "Provide an absolute URL or configured base URL before normalization",
+        "severity": "permanent"
+      },
+      {
+        "condition": "Header value is not a string or string array",
+        "symptom": "400 error identifying the invalid header",
+        "recovery": "Convert header values to strings before calling the module",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["web", "http", "normalization", "gateway", "request"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    },
+    {
+      "description": "Must not perform authentication or authorization decisions",
+      "detection_method": "manual_review",
+      "severity": "medium"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Use the WHATWG URL class to parse url. Uppercase method, lowercase header names, preserve duplicate query values as arrays, and keep body unchanged. Never call fetch.",
+    "known_gotchas": "Headers may arrive with mixed case and query parameters may repeat. URL parsing differs for relative URLs unless a base is supplied.",
+    "preferred_approach": "Create normalizeRequest(input) as a pure function and wrap it in a small HTTP route.",
+    "avoid_approach": "Do not send requests, do not infer user identity, and do not drop unknown headers."
+  },
+  "test_cases": [
+    {
+      "name": "normalize method headers and query",
+      "input": { "method": "POST", "path": "/requests/normalize", "body": { "method": "get", "url": "https://example.test/a?x=1&x=2", "headers": { "Content-Type": "text/plain" } } },
+      "expected_status": 200,
+      "expected_body": { "method": "GET", "path": "/a" }
+    },
+    {
+      "name": "invalid URL rejected",
+      "input": { "method": "POST", "path": "/requests/normalize", "body": { "method": "GET", "url": "not a url" } },
+      "expected_status": 400
+    }
+  ]
+}

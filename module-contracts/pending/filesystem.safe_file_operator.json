@@ -1,0 +1,231 @@
+{
+  "module_id": "filesystem.safe_file_operator",
+  "version": "0.1.0",
+  "category": "storage",
+  "capability_type": "provider",
+  "purpose": "Provide scoped local file read, write, list, and delete operations for agents that need basic filesystem access without path traversal.",
+  "reuse_scope": [
+    "desktop utility applications",
+    "local automation workflows",
+    "module test fixture setup",
+    "controlled file import tools"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/files/read",
+        "input_schema": "FileReadRequest",
+        "output_schema": "FileReadResult",
+        "description": "Read a UTF-8 or base64 encoded file inside an allowed root path."
+      },
+      {
+        "method": "POST",
+        "path": "/files/write",
+        "input_schema": "FileWriteRequest",
+        "output_schema": "FileWriteResult",
+        "description": "Write file content inside an allowed root path, creating parent directories when requested."
+      },
+      {
+        "method": "POST",
+        "path": "/files/list",
+        "input_schema": "FileListRequest",
+        "output_schema": "FileListResult",
+        "description": "List files and directories beneath an allowed root path."
+      },
+      {
+        "method": "DELETE",
+        "path": "/files/delete",
+        "input_schema": "FileDeleteRequest",
+        "output_schema": "FileDeleteResult",
+        "description": "Delete one file inside an allowed root path."
+      }
+    ],
+    "schemas": {
+      "FileReadRequest": {
+        "type": "object",
+        "required": ["root_path", "relative_path"],
+        "properties": {
+          "root_path": { "type": "string" },
+          "relative_path": { "type": "string" },
+          "encoding": { "type": "string", "enum": ["utf8", "base64"] }
+        }
+      },
+      "FileReadResult": {
+        "type": "object",
+        "required": ["path", "content", "encoding"],
+        "properties": {
+          "path": { "type": "string" },
+          "content": { "type": "string" },
+          "encoding": { "type": "string" }
+        }
+      },
+      "FileWriteRequest": {
+        "type": "object",
+        "required": ["root_path", "relative_path", "content"],
+        "properties": {
+          "root_path": { "type": "string" },
+          "relative_path": { "type": "string" },
+          "content": { "type": "string" },
+          "encoding": { "type": "string", "enum": ["utf8", "base64"] },
+          "create_parent_directories": { "type": "boolean" }
+        }
+      },
+      "FileWriteResult": {
+        "type": "object",
+        "required": ["written", "path", "bytes"],
+        "properties": {
+          "written": { "type": "boolean" },
+          "path": { "type": "string" },
+          "bytes": { "type": "integer" }
+        }
+      },
+      "FileListRequest": {
+        "type": "object",
+        "required": ["root_path", "relative_path"],
+        "properties": {
+          "root_path": { "type": "string" },
+          "relative_path": { "type": "string" },
+          "recursive": { "type": "boolean" }
+        }
+      },
+      "FileListResult": {
+        "type": "object",
+        "required": ["entries"],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["path", "type"],
+              "properties": {
+                "path": { "type": "string" },
+                "type": { "type": "string", "enum": ["file", "directory"] },
+                "bytes": { "type": "integer" }
+              }
+            }
+          }
+        }
+      },
+      "FileDeleteRequest": {
+        "type": "object",
+        "required": ["root_path", "relative_path"],
+        "properties": {
+          "root_path": { "type": "string" },
+          "relative_path": { "type": "string" }
+        }
+      },
+      "FileDeleteResult": {
+        "type": "object",
+        "required": ["deleted", "path"],
+        "properties": {
+          "deleted": { "type": "boolean" },
+          "path": { "type": "string" }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "filesystem.safe_file_operator",
+    "version": "0.1.0",
+    "purpose": "Scoped file operations for local applications and agent workflows.",
+    "agent_usage": {
+      "when_to_use": "Use when an agent needs to read, write, list, or delete files within a caller-declared root directory.",
+      "when_not_to_use": "Do not use for cloud object storage, database persistence, recursive destructive cleanup, or access outside the declared root.",
+      "example_workflow": "1) Choose a root_path for the workspace. 2) Call /files/list to inspect. 3) Call /files/read or /files/write using relative_path values only."
+    },
+    "common_calls": [
+      {
+        "description": "Read a local text file inside the workspace",
+        "method": "POST",
+        "path_or_command": "/api/v1/files/read",
+        "input_example": { "root_path": "/workspace/project", "relative_path": "README.md", "encoding": "utf8" },
+        "output_example": { "path": "/workspace/project/README.md", "content": "# Project", "encoding": "utf8" }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Resolved path escapes the declared root",
+        "symptom": "400 error with path_scope_violation code",
+        "recovery": "Use a relative_path that remains inside root_path after normalization",
+        "severity": "permanent"
+      },
+      {
+        "condition": "File does not exist",
+        "symptom": "404 error for read or delete calls",
+        "recovery": "List the directory and retry with an existing relative_path",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["filesystem", "file-io", "local", "workspace", "storage"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    },
+    {
+      "description": "Must not follow symlinks that resolve outside root_path",
+      "detection_method": "static_analysis",
+      "severity": "critical",
+      "static_analysis_config": {
+        "tool": "eslint",
+        "rules": ["no-restricted-syntax"]
+      }
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Use node:path resolve(root_path, relative_path) and verify the resolved path starts with resolve(root_path) plus a path separator or equals the root. Use fs.promises.readFile, writeFile, readdir, stat, mkdir, and unlink. For base64 writes, convert with Buffer.from(content, 'base64').",
+    "known_gotchas": "Paths containing .., absolute relative_path values, Windows drive letters, and symlinks can escape root_path if only string concatenation is used.",
+    "preferred_approach": "Create a resolveScopedPath(rootPath, relativePath) helper used by every endpoint before any fs operation.",
+    "avoid_approach": "Do not concatenate paths manually, do not expose recursive directory delete, and do not silently create files outside root_path."
+  },
+  "test_cases": [
+    {
+      "name": "write and read scoped file",
+      "input": { "method": "POST", "path": "/files/write", "body": { "root_path": "/tmp/scope", "relative_path": "notes/a.txt", "content": "hello", "create_parent_directories": true } },
+      "expected_status": 200,
+      "expected_body": { "written": true }
+    },
+    {
+      "name": "reject path traversal",
+      "input": { "method": "POST", "path": "/files/read", "body": { "root_path": "/tmp/scope", "relative_path": "../secret.txt" } },
+      "expected_status": 400,
+      "notes": "Resolved path must be rejected before any filesystem read."
+    }
+  ]
+}

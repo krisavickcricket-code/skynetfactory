@@ -1,0 +1,175 @@
+{
+  "module_id": "android.manifest_analyzer",
+  "version": "0.1.0",
+  "category": "mobile",
+  "capability_type": "analyzer",
+  "purpose": "Analyze AndroidManifest.xml content and report package metadata, activities, services, receivers, providers, permissions, and exported component risks.",
+  "reuse_scope": [
+    "Android application audits",
+    "mobile CI checks",
+    "APK metadata inspection",
+    "security review preparation"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/android/manifest/analyze",
+        "input_schema": "AnalyzeManifestRequest",
+        "output_schema": "AnalyzeManifestResult",
+        "description": "Analyze Android manifest XML supplied directly in the request."
+      }
+    ],
+    "schemas": {
+      "AnalyzeManifestRequest": {
+        "type": "object",
+        "required": ["manifest_xml"],
+        "properties": {
+          "manifest_xml": { "type": "string" }
+        }
+      },
+      "AnalyzeManifestResult": {
+        "type": "object",
+        "required": ["package_name", "permissions", "components", "findings"],
+        "properties": {
+          "package_name": { "type": "string" },
+          "permissions": { "type": "array", "items": { "type": "string" } },
+          "components": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["type", "name", "exported"],
+              "properties": {
+                "type": { "type": "string", "enum": ["activity", "service", "receiver", "provider"] },
+                "name": { "type": "string" },
+                "exported": { "type": "boolean" },
+                "permission": { "type": "string" }
+              }
+            }
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["severity", "message"],
+              "properties": {
+                "severity": { "type": "string", "enum": ["info", "warning", "high"] },
+                "message": { "type": "string" },
+                "component": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "dependencies": [
+    {
+      "module_id": "npm:fast-xml-parser",
+      "version_constraint": "^4.5.0",
+      "purpose": "Parse AndroidManifest.xml into a structured object without Android SDK dependencies",
+      "required_at": "runtime"
+    }
+  ],
+  "sidecar_specification": {
+    "module_id": "android.manifest_analyzer",
+    "version": "0.1.0",
+    "purpose": "Android manifest metadata and exported component analyzer.",
+    "agent_usage": {
+      "when_to_use": "Use when reviewing Android apps, CI outputs, decompiled APK manifests, or mobile permission exposure.",
+      "when_not_to_use": "Do not use for bytecode analysis, APK signing verification, runtime permission prompts, or iOS application metadata.",
+      "example_workflow": "1) Extract AndroidManifest.xml text from source or APK tooling. 2) Submit manifest_xml. 3) Review permissions, components, and exported component findings."
+    },
+    "common_calls": [
+      {
+        "description": "Analyze manifest XML",
+        "method": "POST",
+        "path_or_command": "/api/v1/android/manifest/analyze",
+        "input_example": { "manifest_xml": "<manifest package=\"com.example\"><uses-permission android:name=\"android.permission.INTERNET\" /></manifest>" },
+        "output_example": { "package_name": "com.example", "permissions": ["android.permission.INTERNET"], "components": [], "findings": [] }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Manifest XML is malformed",
+        "symptom": "400 error with xml_parse_failed code",
+        "recovery": "Provide well-formed AndroidManifest.xml content",
+        "severity": "permanent"
+      },
+      {
+        "condition": "Android namespace attributes are missing or renamed",
+        "symptom": "Some component names or exported flags are absent",
+        "recovery": "Ensure manifest XML preserves android:name and android:exported attributes",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["android", "mobile", "manifest", "security", "analyzer"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    },
+    {
+      "description": "Must not execute Android build tools or APK installers",
+      "detection_method": "static_analysis",
+      "severity": "high",
+      "static_analysis_config": {
+        "tool": "eslint",
+        "rules": ["no-child-process"]
+      }
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Use fast-xml-parser with ignoreAttributes false and attributeNamePrefix ''. Read manifest.package, uses-permission entries, and application activity/service/receiver/provider arrays. Normalize single objects to arrays before iteration.",
+    "known_gotchas": "Android manifests may use android:name attributes and shorthand component names beginning with dot. android:exported defaults changed by Android version and should be reported as unknown unless explicit.",
+    "preferred_approach": "Parse XML only, normalize manifest structures, and generate findings for explicitly exported components lacking a permission.",
+    "avoid_approach": "Do not shell out to aapt, adb, gradle, or apktool in this module."
+  },
+  "test_cases": [
+    {
+      "name": "extract package and permission",
+      "input": { "method": "POST", "path": "/android/manifest/analyze", "body": { "manifest_xml": "<manifest package=\"com.example\"><uses-permission android:name=\"android.permission.INTERNET\" /></manifest>" } },
+      "expected_status": 200,
+      "expected_body": { "package_name": "com.example", "permissions": ["android.permission.INTERNET"] }
+    },
+    {
+      "name": "malformed XML rejected",
+      "input": { "method": "POST", "path": "/android/manifest/analyze", "body": { "manifest_xml": "<manifest>" } },
+      "expected_status": 400
+    }
+  ]
+}
