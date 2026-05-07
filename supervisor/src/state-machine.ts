@@ -4,22 +4,28 @@
  * Follows the contract_lifecycle definition from the authority contract.
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync, unlinkSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync, unlinkSync, readdirSync } from 'node:fs';
 import { resolve, join } from 'node:path';
-import { getConfig } from './config.js';
+import { getConfig, ROOT_DIR } from './config.js';
 
 export type ContractState = 'pending' | 'claimed' | 'building' | 'testing' | 'completed' | 'remediation' | 'rejected';
 
-const ROOT = 'C:/SkynetFactory';
 const CONTRACT_DIRS: Record<ContractState, string> = {
-  pending: join(ROOT, 'module-contracts/pending'),
-  claimed: join(ROOT, 'module-contracts/claimed'),
-  building: join(ROOT, 'module-contracts/building'),
-  testing: join(ROOT, 'module-contracts/testing'),
-  completed: join(ROOT, 'module-contracts/completed'),
-  remediation: join(ROOT, 'module-contracts/remediation'),
-  rejected: join(ROOT, 'module-contracts/rejected'),
+  pending: join(ROOT_DIR, 'module-contracts/pending'),
+  claimed: join(ROOT_DIR, 'module-contracts/claimed'),
+  building: join(ROOT_DIR, 'module-contracts/building'),
+  testing: join(ROOT_DIR, 'module-contracts/testing'),
+  completed: join(ROOT_DIR, 'module-contracts/completed'),
+  remediation: join(ROOT_DIR, 'module-contracts/remediation'),
+  rejected: join(ROOT_DIR, 'module-contracts/rejected'),
 };
+
+// In-memory cache for contract list queries
+let _contractIndex: Array<{ module_id: string; state: ContractState }> | null = null;
+
+export function invalidateContractIndex(): void {
+  _contractIndex = null;
+}
 
 export interface ContractStateFile {
   module_id: string;
@@ -88,6 +94,7 @@ export function loadContract(moduleId: string): Record<string, unknown> | null {
 
 export function saveState(state: ContractStateFile): void {
   const dir = CONTRACT_DIRS[state.current_state];
+  mkdirSync(dir, { recursive: true });
   const statePath = join(dir, `${state.module_id}.state.json`);
   writeFileSync(statePath, JSON.stringify(state, null, 2));
 }
@@ -142,6 +149,9 @@ export function transitionContract(
     Object.assign(state, extras);
   }
 
+  // Ensure target directory exists
+  mkdirSync(newDir, { recursive: true });
+
   // Move files atomically
   if (existsSync(oldContractPath) && oldDir !== newDir) {
     renameSync(oldContractPath, newContractPath);
@@ -153,6 +163,7 @@ export function transitionContract(
     unlinkSync(oldStatePath);
   }
 
+  invalidateContractIndex();
   return state;
 }
 
@@ -166,22 +177,22 @@ export function canTransition(moduleId: string, toState: ContractState): boolean
 
 export function listContractsByState(state: ContractState): string[] {
   const dir = CONTRACT_DIRS[state];
-  const fs = require('fs');
   if (!existsSync(dir)) return [];
-  return fs.readdirSync(dir)
+  return readdirSync(dir)
     .filter((f: string) => f.endsWith('.json') && !f.endsWith('.state.json'))
     .map((f: string) => f.replace('.json', ''));
 }
 
 export function listAllContracts(): Array<{ module_id: string; state: ContractState }> {
+  if (_contractIndex) return _contractIndex;
   const result: Array<{ module_id: string; state: ContractState }> = [];
   for (const [state, dir] of Object.entries(CONTRACT_DIRS)) {
     if (!existsSync(dir)) continue;
-    const fs = require('fs');
-    const files = fs.readdirSync(dir).filter((f: string) => f.endsWith('.json') && !f.endsWith('.state.json'));
+    const files = readdirSync(dir).filter((f: string) => f.endsWith('.json') && !f.endsWith('.state.json'));
     for (const f of files) {
       result.push({ module_id: f.replace('.json', ''), state: state as ContractState });
     }
   }
+  _contractIndex = result;
   return result;
 }

@@ -3,7 +3,7 @@
   "agent_swarm_local_source_path": "C:\\Agent-Swarm_ref\\agent-swarm-main\\agent-swarm-main",
   "agent_swarm_repo_path": "C:\\SkynetFactory\\orchestration\\agent-swarm",
   "clone_agent_swarm_from_github": false,
-  "agent_swarm_api_base_url": "http://localhost:3013",
+  "agent_swarm_api_base_url": "http://localhost:4000",
   "agent_swarm_dashboard_url": "http://localhost:5274",
   "ollama_host_url": "http://localhost:11434",
   "ollama_container_url": "http://host.docker.internal:11434",

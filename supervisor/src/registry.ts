@@ -3,11 +3,12 @@
  * File-per-module registry with atomic writes and index management.
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync, readdirSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
+import { ROOT_DIR } from './config.js';
 
-const REGISTRY_DIR = 'C:/SkynetFactory/registry';
+const REGISTRY_DIR = join(ROOT_DIR, 'registry');
 const INDEX_PATH = join(REGISTRY_DIR, 'modules.json');
 
 export interface RegistryEntry {
@@ -36,7 +37,7 @@ export interface RegistryEntry {
 function atomicWrite(filePath: string, data: string): void {
   const tmpPath = filePath + '.tmp';
   writeFileSync(tmpPath, data);
-  require('node:fs').renameSync(tmpPath, filePath);
+  renameSync(tmpPath, filePath);
 }
 
 function computeHash(content: string): string {

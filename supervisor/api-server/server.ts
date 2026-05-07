@@ -6,24 +6,24 @@
 
 import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import websocket from '@fastify/websocket';
-import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
-import { getConfig } from '../config.js';
+import { getConfig, ROOT_DIR } from '../src/config.js';
 import {
   ContractState, createStateFile, loadState, saveState, loadContract,
   transitionContract, canTransition, listAllContracts
-} from '../state-machine.js';
-import { acquireLock, releaseLock, isLocked } from '../lock-manager.js';
-import { runAllGates } from '../gate-runner.js';
-import { register, lookup, search, deprecate, supersede, getRegistryIndex, computeContractHash } from '../registry.js';
-import { ensureWorktree, scaffoldModule, commitAndTag, copyToProduction, tagVerified } from '../rollback.js';
-import { buildTaskPacket, contractToPrompt, deriveWriteScope, getCurrentModel } from '../ollama-adapter.js';
-import { contractToAgentSwarmTask, submitTaskToAgentSwarm, isAgentSwarmAvailable } from '../agent-swarm-adapter.js';
-import { getHealthSummary } from '../health-checks.js';
-import { getCircuitBreakerState, onCircuitBreakerChange } from '../circuit-breaker.js';
-import { RegistryEntry } from '../registry.js';
+} from '../src/state-machine.js';
+import { acquireLock, releaseLock, isLocked } from '../src/lock-manager.js';
+import { runAllGates } from '../src/gate-runner.js';
+import { register, lookup, search, deprecate, supersede, getRegistryIndex, computeContractHash } from '../src/registry.js';
+import { ensureWorktree, scaffoldModule, commitAndTag, copyToProduction, tagVerified } from '../src/rollback.js';
+import { buildTaskPacket, contractToPrompt, deriveWriteScope, getCurrentModel } from '../src/ollama-adapter.js';
+import { contractToAgentSwarmTask, submitTaskToAgentSwarm, isAgentSwarmAvailable } from '../module-builder/agent-swarm-adapter.js';
+import { getHealthSummary } from '../src/health-checks.js';
+import { getCircuitBreakerState, onCircuitBreakerChange } from '../src/circuit-breaker.js';
+import { RegistryEntry } from '../src/registry.js';
 
-const ROOT = 'C:/SkynetFactory';
+const ROOT = ROOT_DIR;
 const PORT = 3013;
 
 // WebSocket connections
@@ -56,7 +56,15 @@ export async function createApiServer(): Promise<FastifyInstance> {
     }));
   });
 
-  // Security headers
+  // Security headers and CORS
+  app.addHook('onRequest', async (request, reply) => {
+    // Reject non-localhost origins
+    const origin = request.headers.origin;
+    if (origin && !origin.includes('127.0.0.1') && !origin.includes('localhost')) {
+      reply.code(403).send({ status: 'error', error: { code: 'FORBIDDEN', message: 'Origin not allowed' } });
+      return;
+    }
+  });
   app.addHook('onSend', async (request, reply, payload) => {
     reply.header('X-Content-Type-Options', 'nosniff');
     reply.header('Cache-Control', 'no-store');
@@ -122,7 +130,7 @@ export async function createApiServer(): Promise<FastifyInstance> {
       const ajv = new Ajv.default();
       const addFormats = await import('ajv-formats');
       addFormats.default(ajv);
-      const schema = JSON.parse(readFileSync('C:/SkynetFactory/module-contracts/_instructions/MODULE_CONTRACT_SCHEMA.json', 'utf-8'));
+      const schema = JSON.parse(readFileSync(join(ROOT_DIR, 'module-contracts/_instructions/MODULE_CONTRACT_SCHEMA.json'), 'utf-8'));
       const validate = ajv.compile(schema);
       if (!validate(body)) {
         reply.code(422);
@@ -134,7 +142,7 @@ export async function createApiServer(): Promise<FastifyInstance> {
     }
 
     // Write contract file
-    const pendingDir = 'C:/SkynetFactory/module-contracts/pending';
+    const pendingDir = join(ROOT_DIR, 'module-contracts/pending');
     mkdirSync(pendingDir, { recursive: true });
     writeFileSync(join(pendingDir, `${moduleId}.json`), JSON.stringify(body, null, 2));
 
@@ -196,20 +204,20 @@ export async function createApiServer(): Promise<FastifyInstance> {
 
     // Remove contract and state files
     const dir = state.current_state === 'pending'
-      ? 'C:/SkynetFactory/module-contracts/pending'
-      : 'C:/SkynetFactory/module-contracts/claimed';
+      ? join(ROOT_DIR, 'module-contracts/pending')
+      : join(ROOT_DIR, 'module-contracts/claimed');
 
     try {
       if (existsSync(join(dir, `${moduleId}.json`))) {
-        writeFileSync(join('C:/SkynetFactory/module-contracts/rejected', `${moduleId}.json`), readFileSync(join(dir, `${moduleId}.json`)));
+        writeFileSync(join(ROOT_DIR, 'module-contracts/rejected', `${moduleId}.json`), readFileSync(join(dir, `${moduleId}.json`)));
       }
       if (existsSync(join(dir, `${moduleId}.state.json`))) {
         const rejectState = { ...state, current_state: 'rejected' as ContractState };
-        writeFileSync(join('C:/SkynetFactory/module-contracts/rejected', `${moduleId}.state.json`), JSON.stringify(rejectState, null, 2));
+        mkdirSync(join(ROOT_DIR, 'module-contracts/rejected'), { recursive: true });
+        writeFileSync(join(ROOT_DIR, 'module-contracts/rejected', `${moduleId}.state.json`), JSON.stringify(rejectState, null, 2));
       }
-      // Remove from original
-      try { require('fs').unlinkSync(join(dir, `${moduleId}.json`)); } catch {}
-      try { require('fs').unlinkSync(join(dir, `${moduleId}.state.json`)); } catch {}
+      if (existsSync(join(dir, `${moduleId}.json`))) unlinkSync(join(dir, `${moduleId}.json`));
+      if (existsSync(join(dir, `${moduleId}.state.json`))) unlinkSync(join(dir, `${moduleId}.state.json`));
     } catch {}
 
     releaseLock(moduleId);
@@ -306,13 +314,13 @@ export async function createApiServer(): Promise<FastifyInstance> {
   // PUT /config - Update configuration
   app.put('/skynetfactory/api/config', async (request, reply) => {
     const updates = request.body as Record<string, unknown>;
-    const configPath = 'C:/SkynetFactory/config/builder.config.json';
+    const configPath = join(ROOT_DIR, 'config/builder.config.json');
     const currentConfig = JSON.parse(readFileSync(configPath, 'utf-8'));
     const newConfig = { ...currentConfig, ...updates };
     writeFileSync(configPath, JSON.stringify(newConfig, null, 2));
 
     // Reload config
-    const { reloadConfig } = await import('../config.js');
+    const { reloadConfig } = await import('../src/config.js');
     reloadConfig();
 
     return { status: 'success', data: getConfig() };

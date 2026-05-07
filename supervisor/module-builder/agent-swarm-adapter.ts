@@ -5,8 +5,9 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { getConfig } from './config.js';
-import { buildTaskPacket, type TaskPacket } from './ollama-adapter.js';
+import { join } from 'node:path';
+import { getConfig, ROOT_DIR } from '../src/config.js';
+import { buildTaskPacket, type TaskPacket } from '../src/ollama-adapter.js';
 
 export interface AgentSwarmTask {
   task: string;
@@ -33,7 +34,7 @@ export function contractToAgentSwarmTask(contract: Record<string, unknown>, task
       `language:${contract.language}`,
     ],
     priority: 5,
-    dir: `C:/SkynetFactory/worktrees/${contract.module_id}`,
+    dir: join(ROOT_DIR, 'worktrees', String(contract.module_id)),
     contextKey: `skynetfactory:${contract.module_id}`,
     // AgentSwarm custom fields
     skynetfactory_task_packet: taskPacket,

@@ -4,11 +4,11 @@
  * Uses OS-level exclusive file creation for atomicity.
  */
 
-import { writeFileSync, existsSync, unlinkSync, mkdirSync, readFileSync } from 'node:fs';
+import { writeFileSync, existsSync, unlinkSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { getConfig } from './config.js';
+import { getConfig, ROOT_DIR } from './config.js';
 
-const LOCK_DIR = 'C:/SkynetFactory/temp/claims';
+const LOCK_DIR = join(ROOT_DIR, 'temp/claims');
 
 export interface LockFile {
   module_id: string;
@@ -24,21 +24,6 @@ export function acquireLock(moduleId: string, workerId: string): { success: bool
 
   if (!existsSync(LOCK_DIR)) mkdirSync(LOCK_DIR, { recursive: true });
 
-  // Check for existing lock
-  if (existsSync(lockPath)) {
-    const existing: LockFile = JSON.parse(readFileSync(lockPath, 'utf-8'));
-    const now = new Date();
-    const expiresAt = new Date(existing.lock_expires_at);
-
-    if (now < expiresAt) {
-      return { success: false, reason: `Lock held by ${existing.worker_id}, expires at ${existing.lock_expires_at}` };
-    }
-
-    // Stale lock - force release with warning
-    console.warn(`[Lock] Force-releasing stale lock for ${moduleId} (expired at ${existing.lock_expires_at})`);
-    unlinkSync(lockPath);
-  }
-
   const claimedAt = new Date();
   const lockTimeoutMs = config.lock_timeout_ms || 30000;
   const lockExpiresAt = new Date(claimedAt.getTime() + lockTimeoutMs);
@@ -52,13 +37,26 @@ export function acquireLock(moduleId: string, workerId: string): { success: bool
     lock_expires_at: lockExpiresAt.toISOString(),
   };
 
-  // Atomic write using exclusive creation
+  // Atomic write using exclusive creation — no TOCTOU race
   try {
     writeFileSync(lockPath, JSON.stringify(lock, null, 2), { flag: 'wx' });
     return { success: true, lock };
   } catch (err: any) {
     if (err.code === 'EEXIST') {
-      return { success: false, reason: 'Lock file created by another process between check and write' };
+      // Lock file exists — check if it's stale
+      try {
+        const existing: LockFile = JSON.parse(readFileSync(lockPath, 'utf-8'));
+        if (new Date() > new Date(existing.lock_expires_at)) {
+          // Stale lock — take it over
+          writeFileSync(lockPath, JSON.stringify(lock, null, 2));
+          return { success: true, lock };
+        }
+        return { success: false, reason: `Lock held by ${existing.worker_id}, expires at ${existing.lock_expires_at}` };
+      } catch {
+        // Corrupted lock file — remove and retry
+        unlinkSync(lockPath);
+        return acquireLock(moduleId, workerId);
+      }
     }
     throw err;
   }
@@ -93,21 +91,20 @@ export function startDeadlockDetection(): void {
   if (deadlockInterval) return;
 
   deadlockInterval = setInterval(() => {
-    const fs = require('fs');
     if (!existsSync(LOCK_DIR)) return;
 
-    const files = fs.readdirSync(LOCK_DIR).filter((f: string) => f.endsWith('.lock'));
+    const files = readdirSync(LOCK_DIR).filter((f: string) => f.endsWith('.lock'));
     for (const file of files) {
-      const lockPath = join(LOCK_DIR, file);
+      const lockP = join(LOCK_DIR, file);
       try {
-        const lock: LockFile = JSON.parse(readFileSync(lockPath, 'utf-8'));
+        const lock: LockFile = JSON.parse(readFileSync(lockP, 'utf-8'));
         if (new Date() > new Date(lock.lock_expires_at)) {
           console.warn(`[DeadlockCheck] Force-releasing stale lock: ${file}`);
-          unlinkSync(lockPath);
+          unlinkSync(lockP);
         }
       } catch {
         // Corrupted lock file - remove it
-        unlinkSync(lockPath);
+        unlinkSync(lockP);
       }
     }
   }, config.lock_timeout_ms || 60000);

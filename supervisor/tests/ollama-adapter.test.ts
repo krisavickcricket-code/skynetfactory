@@ -4,8 +4,11 @@ import { deriveWriteScope, isCommandAllowed, isPathInWriteScope } from '../src/o
 describe('Write Scope', () => {
   it('should derive write scope for a module', () => {
     const scope = deriveWriteScope('storage.integrity_verifier');
-    expect(scope).toContain('C:/SkynetFactory/worktrees/storage.integrity_verifier/**');
-    expect(scope).toContain('C:/SkynetFactory/logs/storage.integrity_verifier/**');
+    expect(scope.length).toBe(2);
+    expect(scope[0]).toContain('worktrees');
+    expect(scope[0]).toContain('storage.integrity_verifier');
+    expect(scope[1]).toContain('logs');
+    expect(scope[1]).toContain('storage.integrity_verifier');
   });
 
   it('should block path traversal', () => {

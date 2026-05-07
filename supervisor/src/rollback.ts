@@ -6,13 +6,13 @@
 import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, cpSync, rmSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { ROOT_DIR } from './config.js';
 import { loadState, saveState } from './state-machine.js';
 
-const ROOT = 'C:/SkynetFactory';
-const WORKTREES_DIR = join(ROOT, 'worktrees');
-const PRODUCTION_DIR = join(ROOT, 'production-modules');
-const FAILED_ATTEMPTS_DIR = join(ROOT, 'logs/failed_attempts');
-const EVIDENCE_DIR = join(ROOT, 'logs/evidence');
+const WORKTREES_DIR = join(ROOT_DIR, 'worktrees');
+const PRODUCTION_DIR = join(ROOT_DIR, 'production-modules');
+const FAILED_ATTEMPTS_DIR = join(ROOT_DIR, 'logs/failed_attempts');
+const EVIDENCE_DIR = join(ROOT_DIR, 'logs/evidence');
 
 function git(command: string, cwd?: string): string {
   const opts: any = { maxBuffer: 1024 * 1024 * 10 };
@@ -33,21 +33,21 @@ export function ensureWorktree(moduleId: string): string {
   const branchName = `module/${moduleId}`;
 
   // Create branch if not exists
-  const branchExists = gitOrEmpty(`branch --list ${branchName}`, ROOT).length > 0;
+  const branchExists = gitOrEmpty(`branch --list ${branchName}`, ROOT_DIR).length > 0;
   if (!branchExists) {
-    git(`checkout -b ${branchName}`, ROOT);
-    git(`checkout main`, ROOT); // go back to main
+    git(`checkout -b ${branchName}`, ROOT_DIR);
+    git(`checkout main`, ROOT_DIR); // go back to main
   }
 
   // Create worktree if not exists
   if (!existsSync(worktreePath)) {
     mkdirSync(WORKTREES_DIR, { recursive: true });
     try {
-      git(`worktree add "${worktreePath}" ${branchName}`, ROOT);
+      git(`worktree add "${worktreePath}" ${branchName}`, ROOT_DIR);
     } catch {
       // Worktree may already be registered but dir missing
-      gitOrEmpty(`worktree remove "${worktreePath}" --force`, ROOT);
-      git(`worktree add "${worktreePath}" ${branchName}`, ROOT);
+      gitOrEmpty(`worktree remove "${worktreePath}" --force`, ROOT_DIR);
+      git(`worktree add "${worktreePath}" ${branchName}`, ROOT_DIR);
     }
   }
 
@@ -194,4 +194,18 @@ export function tagVerified(moduleId: string, version: string): string {
   gitOrEmpty(`add -A && git commit -m "verified-${version}-${timestamp}" --allow-empty`, worktreePath);
 
   return tagName;
+}
+
+/**
+ * Ensure a git repo exists at ROOT_DIR. Initialize one if missing.
+ */
+export function ensureGitRepo(): void {
+  if (!existsSync(join(ROOT_DIR, '.git'))) {
+    console.warn(`[Rollback] No git repo found at ${ROOT_DIR}. Initializing...`);
+    git('init', ROOT_DIR);
+    gitOrEmpty('checkout -b main', ROOT_DIR);
+    writeFileSync(join(ROOT_DIR, '.gitkeep'), '');
+    gitOrEmpty('add .gitkeep', ROOT_DIR);
+    gitOrEmpty('commit -m "initial commit" --allow-empty', ROOT_DIR);
+  }
 }

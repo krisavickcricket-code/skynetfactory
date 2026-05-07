@@ -3,3 +3,21 @@ dist/
 .env
 *.log
 temp/claims/*.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+supervisor/dist/
+worker-runtime/dist/
+ui/electron-app/dist/
+
+# Test artifacts
+coverage/

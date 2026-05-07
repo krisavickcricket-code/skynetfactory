@@ -3,7 +3,7 @@
  * Startup probes and runtime probes per the authority contract.
  */
 
-import { getConfig } from './config.js';
+import { getConfig, ROOT_DIR } from './config.js';
 
 export interface HealthStatus {
   component: string;
@@ -12,40 +12,48 @@ export interface HealthStatus {
   checked_at: string;
 }
 
-const startupProbes = [
-  {
-    name: 'ollama',
-    url: 'http://localhost:11434/api/tags',
-    method: 'GET',
-    expectedStatus: 200,
-    timeoutMs: 5000,
-    required: true,
-    onFailure: 'halt_with_error',
-  },
-  {
-    name: 'ollama_default_model',
-    url: 'http://localhost:11434/api/tags',
-    method: 'GET',
-    expectedStatus: 200,
-    timeoutMs: 5000,
-    required: false,
-    onFailure: 'attempt_pull',
-  },
-  {
-    name: 'agent_swarm_api',
-    url: 'http://localhost:3013/health',
-    method: 'GET',
-    expectedStatus: 200,
-    timeoutMs: 5000,
-    required: false,
-    onFailure: 'warn',
-  },
-];
+function getStartupProbes() {
+  const config = getConfig();
+  return [
+    {
+      name: 'ollama',
+      url: config.ollama_host_url || 'http://localhost:11434/api/tags',
+      method: 'GET',
+      expectedStatus: 200,
+      timeoutMs: 5000,
+      required: true,
+      onFailure: 'halt_with_error',
+    },
+    {
+      name: 'ollama_default_model',
+      url: config.ollama_host_url || 'http://localhost:11434/api/tags',
+      method: 'GET',
+      expectedStatus: 200,
+      timeoutMs: 5000,
+      required: false,
+      onFailure: 'attempt_pull',
+    },
+    {
+      name: 'agent_swarm_api',
+      url: config.agent_swarm_api_base_url
+        ? `${config.agent_swarm_api_base_url.replace(/\/$/, '')}/health`
+        : 'http://localhost:4000/health',
+      method: 'GET',
+      expectedStatus: 200,
+      timeoutMs: 5000,
+      required: false,
+      onFailure: 'warn',
+    },
+  ];
+}
 
-const runtimeProbes = [
-  { name: 'ollama_heartbeat', url: 'http://localhost:11434/api/tags', method: 'GET', timeoutMs: 3000 },
-  { name: 'agent_swarm_heartbeat', url: 'http://localhost:3013/health', method: 'GET', timeoutMs: 3000 },
-];
+function getRuntimeProbes() {
+  const config = getConfig();
+  return [
+    { name: 'ollama_heartbeat', url: config.ollama_host_url || 'http://localhost:11434/api/tags', method: 'GET', timeoutMs: 3000 },
+    { name: 'agent_swarm_heartbeat', url: config.agent_swarm_api_base_url ? `${config.agent_swarm_api_base_url.replace(/\/$/, '')}/health` : 'http://localhost:4000/health', method: 'GET', timeoutMs: 3000 },
+  ];
+}
 
 let runtimeInterval: ReturnType<typeof setInterval> | null = null;
 const healthHistory: Map<string, HealthStatus> = new Map();
@@ -81,6 +89,7 @@ async function probeUrl(url: string, method: string, timeoutMs: number): Promise
 
 export async function runStartupProbes(): Promise<{ healthy: boolean; statuses: HealthStatus[] }> {
   const config = getConfig();
+  const startupProbes = getStartupProbes();
   const statuses: HealthStatus[] = [];
   let allHealthy = true;
 
@@ -117,6 +126,7 @@ export async function runStartupProbes(): Promise<{ healthy: boolean; statuses: 
 }
 
 export async function runRuntimeProbes(): Promise<Map<string, HealthStatus>> {
+  const runtimeProbes = getRuntimeProbes();
   for (const probe of runtimeProbes) {
     const result = await probeUrl(probe.url, probe.method, probe.timeoutMs);
     const status: HealthStatus = {
@@ -135,6 +145,18 @@ export async function runRuntimeProbes(): Promise<Map<string, HealthStatus>> {
   }
 
   return new Map(healthHistory);
+}
+
+export async function runStartupProbesWithRetry(maxRetries: number = 3, delayMs: number = 10000): Promise<{ healthy: boolean; statuses: HealthStatus[] }> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const result = await runStartupProbes();
+    if (result.healthy) return result;
+    if (attempt < maxRetries) {
+      console.warn(`[Health] Startup probes failed (attempt ${attempt}/${maxRetries}), retrying in ${delayMs}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+  return runStartupProbes();
 }
 
 export function startRuntimeProbes(): void {

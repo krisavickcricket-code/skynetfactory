@@ -5,9 +5,11 @@
  */
 
 import { readFileSync, existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { resolve, join } from 'node:path';
 
-const CONFIG_PATH = resolve('C:/SkynetFactory/config/builder.config.json');
+export const ROOT_DIR = process.env.SKYNET_FACTORY_ROOT || 'C:/SkynetFactory';
+
+const CONFIG_PATH = resolve(ROOT_DIR, 'config/builder.config.json');
 
 // Behavioral defaults from the authority contract (architecture)
 const BEHAVIORAL_DEFAULTS = {

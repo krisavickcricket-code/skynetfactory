@@ -13,6 +13,7 @@ import { promisify } from 'node:util';
 const execAsync = promisify(exec);
 
 // === Configuration ===
+const SKYNET_ROOT = process.env.SKYNET_FACTORY_ROOT || 'C:/SkynetFactory';
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const DEFAULT_TEMPERATURE = parseFloat(process.env.DEFAULT_TEMPERATURE || '0.1');
 const SEED_CONTROL = process.env.SEED_CONTROL !== 'false';
@@ -309,7 +310,7 @@ async function main() {
   }
 
   const taskPacket: TaskPacket = JSON.parse(readFileSync(taskPacketPath, 'utf-8'));
-  const worktreePath = `C:/SkynetFactory/worktrees/${taskPacket.module_id}`;
+  const worktreePath = join(SKYNET_ROOT, 'worktrees', taskPacket.module_id);
 
   if (!existsSync(worktreePath)) {
     mkdirSync(worktreePath, { recursive: true });
@@ -324,9 +325,10 @@ async function main() {
   }
 }
 
-// Run if called directly
-if (process.argv[1]?.includes('worker.ts')) {
-  main();
-}
+// Run main (no argv check for reliability with tsx)
+main().catch((err) => {
+  console.error(`[Worker] Fatal: ${err.message}`);
+  process.exit(1);
+});
 
 export { implementModule, isInWriteScope, isCommandAllowed };

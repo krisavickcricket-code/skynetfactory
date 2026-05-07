@@ -9,7 +9,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, resolve, normalize } from 'node:path';
 import { createHash } from 'node:crypto';
 import { promisify } from 'node:util';
-import { getConfig } from './config.js';
+import { getConfig, ROOT_DIR } from './config.js';
 import { loadState, saveState } from './state-machine.js';
 
 const execAsync = promisify(exec);
@@ -50,8 +50,8 @@ export interface OllamaResponse {
  */
 export function deriveWriteScope(moduleId: string): string[] {
   return [
-    `C:/SkynetFactory/worktrees/${moduleId}/**`,
-    `C:/SkynetFactory/logs/${moduleId}/**`,
+    join(ROOT_DIR, 'worktrees', moduleId) + '/**',
+    join(ROOT_DIR, 'logs', moduleId) + '/**',
   ];
 }
 
@@ -192,7 +192,7 @@ export function buildTaskPacket(moduleId: string, contract: Record<string, unkno
     module_id: moduleId,
     module_contract: contract,
     write_scope: deriveWriteScope(moduleId),
-    production_module_path: `C:/SkynetFactory/production-modules/${moduleId}`,
+    production_module_path: join(ROOT_DIR, 'production-modules', moduleId),
     model,
     temperature: config.default_temperature || 0.1,
     seed,
@@ -205,7 +205,7 @@ export function buildTaskPacket(moduleId: string, contract: Record<string, unkno
 export function contractToPrompt(contract: Record<string, unknown>, taskPacket: TaskPacket): string {
   const language = (contract.language as string) || 'typescript';
   const runtime = (contract.runtime as string) || 'node';
-  const worktreePath = `C:/SkynetFactory/worktrees/${contract.module_id}`;
+  const worktreePath = join(ROOT_DIR, 'worktrees', String(contract.module_id));
 
   const sections = [
     `You are a module implementer for SkyNetFactory. You receive a module contract and produce a complete, tested, production-ready implementation. Follow the contract exactly. Do not add features beyond the contract. Do not skip any required test or file.`,
@@ -236,6 +236,27 @@ function getRequiredPaths(language: string): string[] {
 /**
  * Execute a worker run — call Ollama to implement a module
  */
+/**
+ * Extract files from LLM response using --- FILE: path --- ... --- END FILE --- format
+ */
+function extractFilesFromResponse(response: string, baseDir: string, writeScope: string[]): Array<{ path: string; content: string }> {
+  const files: Array<{ path: string; content: string }> = [];
+  const fileRegex = /---\s*FILE:\s*(.+?)\s*---\n([\s\S]*?)---\s*END FILE\s*---/g;
+
+  let match;
+  while ((match = fileRegex.exec(response)) !== null) {
+    const filePath = join(baseDir, match[1].trim());
+    const content = match[2];
+    if (isPathInWriteScope(filePath, writeScope)) {
+      files.push({ path: filePath, content });
+    } else {
+      console.warn(`[OllamaAdapter] Blocked write outside scope: ${filePath}`);
+    }
+  }
+
+  return files;
+}
+
 export async function executeWorker(taskPacket: TaskPacket, worktreePath: string): Promise<Record<string, unknown>> {
   const config = getConfig();
   const moduleId = taskPacket.module_id;
@@ -248,26 +269,37 @@ export async function executeWorker(taskPacket: TaskPacket, worktreePath: string
     const response = await callOllama(model, prompt, taskPacket.temperature, taskPacket.seed);
     const content = response.message?.content || '';
 
-    // Try to extract and save generated code files
-    // In a real implementation, this would parse the LLM response for file contents
-    // and write them to the worktree. For now, we write the raw response.
+    // Extract files from the LLM response (parses --- FILE: ... --- END FILE --- blocks)
+    const extractedFiles = extractFilesFromResponse(content, worktreePath, taskPacket.write_scope);
+    const filesWrittenLog: Array<{ path: string; size_bytes: number; sha256: string }> = [];
+    for (const file of extractedFiles) {
+      const dir = join(file.path, '..');
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+      writeFileSync(file.path, file.content);
+      filesWrittenLog.push({
+        path: file.path,
+        size_bytes: Buffer.byteLength(file.content),
+        sha256: createHash('sha256').update(file.content).digest('hex'),
+      });
+    }
+    // Also write full response for debugging
     writeFileSync(join(worktreePath, 'llm_response.md'), content);
+
+    const changedFiles = extractedFiles.length > 0
+      ? extractedFiles.map(f => f.path)
+      : [join(worktreePath, 'llm_response.md')];
 
     return {
       task_id: taskPacket.task_id,
       module_id: moduleId,
       status: 'passed' as const,
-      changed_files: [join(worktreePath, 'llm_response.md')],
+      changed_files: changedFiles,
       evidence: {
         model_used: model,
         prompt_hash: promptHash,
         write_scope_declared: taskPacket.write_scope,
         commands_executed: [],
-        files_written_log: [{
-          path: join(worktreePath, 'llm_response.md'),
-          size_bytes: Buffer.byteLength(content),
-          sha256: createHash('sha256').update(content).digest('hex'),
-        }],
+        files_written_log: filesWrittenLog,
         duration_ms: 0,
       },
     };

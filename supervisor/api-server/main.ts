@@ -4,22 +4,22 @@
  */
 
 import { startApiServer } from './server.js';
-import { runStartupProbes, startRuntimeProbes, onHealthChange, getHealthSummary } from './health-checks.js';
-import { startDeadlockDetection, stopDeadlockDetection } from './lock-manager.js';
-import { startCircuitBreakerChecks, stopCircuitBreakerChecks, onCircuitBreakerChange, canDispatch, recordGlobalFailure, recordSuccess } from './circuit-breaker.js';
-import { getConfig, reloadConfig } from './config.js';
-import { loadContract, loadState, transitionContract, listAllContracts, saveState, createStateFile } from './state-machine.js';
-import { acquireLock, releaseLock } from './lock-manager.js';
-import { ensureWorktree, scaffoldModule, commitAndTag, rollbackWorktree, commitAndTag as snapshotWorktree, copyToProduction, tagVerified, preserveFailedAttempt } from './rollback.js';
-import { runAllGates } from './gate-runner.js';
-import { register as registryRegister, computeContractHash } from './registry.js';
-import { buildTaskPacket, getCurrentModel, executeWorker, contractToPrompt } from './ollama-adapter.js';
-import { contractToAgentSwarmTask, submitTaskToAgentSwarm, isAgentSwarmAvailable } from '../../supervisor/module-builder/agent-swarm-adapter.js';
-import { watch } from 'node:fs';
+import { runStartupProbes, runStartupProbesWithRetry, startRuntimeProbes, stopRuntimeProbes, onHealthChange, getHealthSummary } from '../src/health-checks.js';
+import { startDeadlockDetection, stopDeadlockDetection } from '../src/lock-manager.js';
+import { startCircuitBreakerChecks, stopCircuitBreakerChecks, onCircuitBreakerChange, canDispatch, recordGlobalFailure, recordSuccess } from '../src/circuit-breaker.js';
+import { getConfig, reloadConfig, ROOT_DIR } from '../src/config.js';
+import { loadContract, loadState, transitionContract, listAllContracts, saveState, createStateFile, invalidateContractIndex } from '../src/state-machine.js';
+import { acquireLock, releaseLock } from '../src/lock-manager.js';
+import { ensureWorktree, scaffoldModule, commitAndTag, rollbackWorktree, copyToProduction, tagVerified, preserveFailedAttempt, ensureGitRepo } from '../src/rollback.js';
+import { runAllGates } from '../src/gate-runner.js';
+import { register as registryRegister, computeContractHash } from '../src/registry.js';
+import { buildTaskPacket, getCurrentModel, executeWorker, contractToPrompt } from '../src/ollama-adapter.js';
+import { contractToAgentSwarmTask, submitTaskToAgentSwarm, isAgentSwarmAvailable } from '../module-builder/agent-swarm-adapter.js';
+import chokidar from 'chokidar';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const PENDING_DIR = 'C:/SkynetFactory/module-contracts/pending';
+const PENDING_DIR = join(ROOT_DIR, 'module-contracts/pending');
 
 async function main() {
   console.log('[SkyNetFactory] Starting supervisor...');
@@ -28,9 +28,9 @@ async function main() {
   const config = getConfig();
   console.log(`[SkyNetFactory] Configuration loaded. Default model: ${config.default_ollama_model}`);
 
-  // Run startup health probes
+  // Run startup health probes with retry
   console.log('[SkyNetFactory] Running startup health probes...');
-  const { healthy, statuses } = await runStartupProbes();
+  const { healthy, statuses } = await runStartupProbesWithRetry(3, 10000);
   for (const s of statuses) {
     console.log(`[SkyNetFactory] Health ${s.component}: ${s.status} - ${s.details}`);
   }
@@ -56,16 +56,24 @@ async function main() {
     console.log(`[SkyNetFactory] Circuit breaker: ${oldState} -> ${newState} (${reason})`);
   });
 
-  // Watch pending directory for new contracts
+  // Ensure git repo exists for worktree operations
+  ensureGitRepo();
+
+  // Watch pending directory for new contracts using chokidar
   console.log('[SkyNetFactory] Watching pending directory for new contracts...');
   try {
-    const watcher = watch(PENDING_DIR, { recursive: false }, (eventType, filename) => {
+    const watcher = chokidar.watch(PENDING_DIR, { ignoreInitial: true });
+    watcher.on('add', (filePath) => {
+      const filename = filePath.split(/[\/\\]/).pop();
       if (filename && filename.endsWith('.json') && !filename.endsWith('.state.json')) {
         console.log(`[SkyNetFactory] New contract detected: ${filename}`);
         processNewContract(filename.replace('.json', '')).catch(err => {
           console.error(`[SkyNetFactory] Error processing contract: ${err.message}`);
         });
       }
+    });
+    watcher.on('error', (err) => {
+      console.warn(`[SkyNetFactory] File watcher error: ${err.message}`);
     });
   } catch (err) {
     console.warn('[SkyNetFactory] File watcher not available, contracts must be submitted via API');
@@ -173,15 +181,15 @@ async function processNewContract(moduleId: string): Promise<void> {
           version: contract.version,
           category: contract.category,
           capability_type: contract.capability_type,
-          path: `C:/SkynetFactory/production-modules/${moduleId}`,
-          contract_path: `C:/SkynetFactory/production-modules/${moduleId}/module.contract.json`,
-          sidecar_path: `C:/SkynetFactory/production-modules/${moduleId}/module.sidecar.json`,
+          path: join(ROOT_DIR, 'production-modules', moduleId),
+          contract_path: join(ROOT_DIR, 'production-modules', moduleId, 'module.contract.json'),
+          sidecar_path: join(ROOT_DIR, 'production-modules', moduleId, 'module.sidecar.json'),
           status: 'verified' as const,
           contract_hash: computeContractHash(contractContent),
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           tags: contract.sidecar_specification?.composition_tags || [],
-          acceptance_evidence_path: `C:/SkynetFactory/logs/evidence/${moduleId}/${Date.now()}`,
+          acceptance_evidence_path: join(ROOT_DIR, 'logs/evidence', moduleId, String(Date.now())),
         };
 
         registryRegister(registryEntry);
@@ -193,17 +201,17 @@ async function processNewContract(moduleId: string): Promise<void> {
         const newFailureCount = currentState.consecutive_failure_count + 1;
 
         // Model fallback at threshold 3
-        if (newFailureCount >= (config.model_fallback_threshold || 3)) {
+        if (newFailureCount >= (getConfig().model_fallback_threshold || 3)) {
           console.warn(`[SkyNetFactory] Model fallback triggered for ${moduleId} (${newFailureCount} consecutive failures)`);
         }
 
         // Circuit breaker at threshold 5
-        if (newFailureCount >= (config.circuit_breaker_trip_after || 5)) {
+        if (newFailureCount >= (getConfig().circuit_breaker_trip_after || 5)) {
           recordGlobalFailure(newFailureCount);
         }
 
         // Check max remediation
-        if (currentState.remediation_count >= (config.max_remediation_attempts || 3)) {
+        if (currentState.remediation_count >= (getConfig().max_remediation_attempts || 3)) {
           transitionContract(moduleId, 'rejected', `max remediation attempts reached (${currentState.remediation_count})`);
           console.error(`[SkyNetFactory] Contract ${moduleId} REJECTED after ${currentState.remediation_count} remediation attempts`);
         } else {
@@ -237,6 +245,18 @@ async function processNewContract(moduleId: string): Promise<void> {
     processing.delete(moduleId);
   }
 }
+
+// Graceful shutdown
+function gracefulShutdown() {
+  console.log('[SkyNetFactory] Shutting down gracefully...');
+  stopCircuitBreakerChecks();
+  stopDeadlockDetection();
+  stopRuntimeProbes();
+  process.exit(0);
+}
+
+process.on('SIGINT', gracefulShutdown);
+process.on('SIGTERM', gracefulShutdown);
 
 // Start
 main().catch(err => {

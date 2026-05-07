@@ -1,15 +1,14 @@
-// @ts-nocheck
 /**
  * Acceptance Gate Runner
  * Implements all gate types from the authority contract.
  * All gates are AND logic — every gate must pass for module completion.
  */
 
-import { execSync, exec } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { exec, execSync } from 'node:child_process';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
-import { getConfig } from './config.js';
+import { getConfig, ROOT_DIR } from './config.js';
 
 const execAsync = promisify(exec);
 
@@ -119,9 +118,9 @@ async function runContractValidation(worktreePath: string, startTime: number): P
     const AjvClass = AjvModule.default as any;
     const formatsModule = await import('ajv-formats');
     const ajv = new AjvClass();
-    formatsModule.default(ajv);
+    (formatsModule as any).default(ajv);
 
-    const schemaPath = 'C:/SkynetFactory/module-contracts/_instructions/MODULE_CONTRACT_SCHEMA.json';
+    const schemaPath = join(ROOT_DIR, 'module-contracts/_instructions/MODULE_CONTRACT_SCHEMA.json');
     const schema = JSON.parse(readFileSync(schemaPath, 'utf-8'));
     const validate = ajv.compile(schema);
 
@@ -146,9 +145,9 @@ async function runSidecarValidation(worktreePath: string, startTime: number): Pr
     const AjvClass2 = AjvModule2.default as any;
     const formatsModule2 = await import('ajv-formats');
     const ajv2 = new AjvClass2();
-    formatsModule2.default(ajv2);
+    (formatsModule2 as any).default(ajv2);
 
-    const schemaPath = 'C:/SkynetFactory/module-contracts/_instructions/SIDECAR_SCHEMA.json';
+    const schemaPath = join(ROOT_DIR, 'module-contracts/_instructions/SIDECAR_SCHEMA.json');
     const schema = JSON.parse(readFileSync(schemaPath, 'utf-8'));
     const validate = ajv2.compile(schema);
 
@@ -171,7 +170,7 @@ async function runTestCommand(testType: string, runtime: string, worktreePath: s
   try {
     const { stdout, stderr } = await execAsync(command, {
       cwd: worktreePath,
-      timeout: 120000 as any,
+      timeout: 120000,
       maxBuffer: 1024 * 1024 * 10 as any,
     });
     return { gate_name: testType as GateName, result: 'pass', details: `Command '${command}' exited successfully`, duration_ms: Date.now() - startTime };
@@ -190,12 +189,12 @@ async function runDockerTests(worktreePath: string, startTime: number): Promise<
   const timeout = config.docker_timeout_ms || 600000;
 
   // Try Docker Compose V2 first, fall back to V1
-  const command = `docker compose -f docker-compose.test.yml up --build --abort-on-container-exit 2>nul || docker-compose -f docker-compose.test.yml up --build --abort-on-container-exit`;
+  const command = `docker compose -f docker-compose.test.yml up --build --abort-on-container-exit || docker-compose -f docker-compose.test.yml up --build --abort-on-container-exit`;
 
   try {
     const { stdout, stderr } = await execAsync(command, {
       cwd: worktreePath,
-      timeout,
+      timeout: Number(timeout) || 600000,
       maxBuffer: 1024 * 1024 * 10,
     });
     return { gate_name: 'docker_tests', result: 'pass', details: 'Docker tests exited successfully', duration_ms: Date.now() - startTime };
@@ -359,7 +358,7 @@ async function runNetworkPolicyValidation(contract: any, worktreePath: string, s
 async function runRegistryValidation(contract: any, startTime: number): Promise<GateResult> {
   const moduleId = contract.module_id;
   // Check if registry entry can be written and read back
-  const registryPath = `C:/SkynetFactory/registry/${moduleId}.json`;
+  const registryPath = join(ROOT_DIR, 'registry', `${moduleId}.json`);
 
   try {
     const testEntry = {
@@ -367,9 +366,9 @@ async function runRegistryValidation(contract: any, startTime: number): Promise<
       version: contract.version,
       category: contract.category,
       capability_type: contract.capability_type,
-      path: `C:/SkynetFactory/production-modules/${moduleId}`,
-      contract_path: `C:/SkynetFactory/production-modules/${moduleId}/module.contract.json`,
-      sidecar_path: `C:/SkynetFactory/production-modules/${moduleId}/module.sidecar.json`,
+      path: join(ROOT_DIR, 'production-modules', moduleId),
+      contract_path: join(ROOT_DIR, 'production-modules', moduleId, 'module.contract.json'),
+      sidecar_path: join(ROOT_DIR, 'production-modules', moduleId, 'module.sidecar.json'),
       status: 'verified',
       contract_hash: 'test',
       created_at: new Date().toISOString(),
@@ -393,10 +392,6 @@ async function runRegistryValidation(contract: any, startTime: number): Promise<
   }
 }
 
-function unlinkSync(path: string) {
-  const { unlinkSync: unlink } = require('node:fs');
-  unlink(path);
-}
 
 /**
  * Run all gates for a module contract
@@ -425,7 +420,7 @@ export async function runAllGates(contract: any, worktreePath: string): Promise<
   writeFileSync(gateResultPath, JSON.stringify(result, null, 2));
 
   // Assemble evidence bundle
-  const evidenceDir = `C:/SkynetFactory/logs/evidence/${contract.module_id}/${Date.now()}`;
+  const evidenceDir = join(ROOT_DIR, 'logs/evidence', contract.module_id, String(Date.now()));
   mkdirSync(evidenceDir, { recursive: true });
   writeFileSync(join(evidenceDir, 'gate_result.json'), JSON.stringify(result, null, 2));
 

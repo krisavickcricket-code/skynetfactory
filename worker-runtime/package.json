@@ -3,10 +3,12 @@
   "version": "1.4.0",
   "description": "SkyNetFactory Ollama worker - implements modules using local Ollama models",
   "type": "module",
+  "main": "dist/worker.js",
   "scripts": {
     "start": "tsx src/worker.ts",
     "build": "tsc"
   },
+  "engines": { "node": ">=18.0.0" },
   "dependencies": {},
   "devDependencies": {
     "typescript": "^5.7.0",

@@ -8,8 +8,8 @@
   "sidecar_path": "C:/SkynetFactory/production-modules/test.test_module/module.sidecar.json",
   "status": "deprecated",
   "contract_hash": "abc123",
-  "created_at": "2026-05-06T22:04:17.767Z",
-  "updated_at": "2026-05-06T22:04:17.770Z",
+  "created_at": "2026-05-07T00:05:01.691Z",
+  "updated_at": "2026-05-07T00:05:01.693Z",
   "tags": [
     "test"
   ],
