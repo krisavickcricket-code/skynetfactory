@@ -1,0 +1,155 @@
+{
+  "module_id": "security.upload_token_issuer",
+  "version": "0.1.0",
+  "category": "security",
+  "capability_type": "provider",
+  "purpose": "Issue short-lived upload tokens, store only their hashes, and validate presented tokens for direct or proxied file upload workflows.",
+  "reuse_scope": [
+    "media upload pipelines",
+    "research dataset intake",
+    "direct-to-storage upload flows",
+    "one-time file transfer endpoints"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/upload-tokens",
+        "input_schema": "CreateUploadTokenRequest",
+        "output_schema": "CreateUploadTokenResult",
+        "description": "Create a one-time or time-limited upload token and return the plaintext token once."
+      },
+      {
+        "method": "POST",
+        "path": "/upload-tokens/verify",
+        "input_schema": "VerifyUploadTokenRequest",
+        "output_schema": "VerifyUploadTokenResult",
+        "description": "Verify a presented upload token against its stored hash and expiration window."
+      }
+    ],
+    "schemas": {
+      "CreateUploadTokenRequest": {
+        "type": "object",
+        "required": ["subject_id", "target_path"],
+        "properties": {
+          "subject_id": { "type": "string" },
+          "target_path": { "type": "string" },
+          "expires_in_minutes": { "type": "integer" }
+        }
+      },
+      "CreateUploadTokenResult": {
+        "type": "object",
+        "required": ["token", "token_id", "expires_at"],
+        "properties": {
+          "token": { "type": "string" },
+          "token_id": { "type": "string" },
+          "expires_at": { "type": "string" }
+        }
+      },
+      "VerifyUploadTokenRequest": {
+        "type": "object",
+        "required": ["token_id", "token"],
+        "properties": {
+          "token_id": { "type": "string" },
+          "token": { "type": "string" }
+        }
+      },
+      "VerifyUploadTokenResult": {
+        "type": "object",
+        "required": ["valid"],
+        "properties": {
+          "valid": { "type": "boolean" },
+          "target_path": { "type": "string" },
+          "reason": { "type": "string" }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "security.upload_token_issuer",
+    "version": "0.1.0",
+    "purpose": "Short-lived upload token issuance and verification using hashed token storage.",
+    "agent_usage": {
+      "when_to_use": "Use when a caller needs a one-time or short-lived upload authorization token rather than permanent credentials.",
+      "when_not_to_use": "Do not use as a general login session token, OAuth access token, or permanent API key.",
+      "example_workflow": "1) Create an upload token bound to a target path. 2) Return the plaintext token once to the client. 3) Verify the token before accepting uploaded bytes."
+    },
+    "common_calls": [
+      {
+        "description": "Issue an upload token",
+        "method": "POST",
+        "path_or_command": "/api/v1/upload-tokens",
+        "input_example": { "subject_id": "subj-1", "target_path": "uploads/subj-1/input.png", "expires_in_minutes": 10 },
+        "output_example": { "token": "plaintext-once", "token_id": "tok-1", "expires_at": "2026-05-07T17:30:00Z" }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Token is expired or already consumed",
+        "symptom": "Verification returns valid false",
+        "recovery": "Issue a fresh token and retry the upload",
+        "severity": "transient"
+      }
+    ],
+    "composition_tags": ["upload", "token", "security", "one-time", "provider"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    },
+    {
+      "description": "Must not persist plaintext upload tokens",
+      "detection_method": "manual_review",
+      "severity": "critical"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Generate upload tokens with crypto.randomBytes or randomUUID-derived randomness, hash them with SHA-256 before persistence, and compare with timingSafeEqual where possible. Bind each token to a target path and expiry.",
+    "known_gotchas": "Returning tokens more than once or storing plaintext tokens expands the blast radius of any database leak. Expired tokens should be cleaned up opportunistically.",
+    "preferred_approach": "Store token_id, token_hash, target_path, expires_at, and consumed_at. Return plaintext token only on creation.",
+    "avoid_approach": "Do not derive tokens from predictable IDs, secrets, or filenames."
+  },
+  "test_cases": [
+    {
+      "name": "issued token verifies once",
+      "input": { "method": "POST", "path": "/upload-tokens/verify", "body": { "token_id": "generated", "token": "generated" } },
+      "expected_status": 200,
+      "expected_body": { "valid": true }
+    }
+  ]
+}

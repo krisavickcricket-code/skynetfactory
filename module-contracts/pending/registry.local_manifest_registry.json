@@ -1,0 +1,143 @@
+{
+  "module_id": "registry.local_manifest_registry",
+  "version": "0.1.0",
+  "category": "data",
+  "capability_type": "indexer",
+  "purpose": "Load, validate, index, and query local JSON manifest files from a directory for capability discovery and project metadata lookups.",
+  "reuse_scope": [
+    "local plugin registries",
+    "domain manifest catalogs",
+    "module discovery tools",
+    "offline capability lookup"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/registry/load",
+        "input_schema": "RegistryLoadRequest",
+        "output_schema": "RegistryLoadResult",
+        "description": "Load and validate manifest entries from a local directory."
+      },
+      {
+        "method": "POST",
+        "path": "/registry/search",
+        "input_schema": "RegistrySearchRequest",
+        "output_schema": "RegistrySearchResult",
+        "description": "Search loaded manifest entries by capability label."
+      }
+    ],
+    "schemas": {
+      "RegistryLoadRequest": {
+        "type": "object",
+        "required": ["root_path"],
+        "properties": {
+          "root_path": { "type": "string" }
+        }
+      },
+      "RegistryLoadResult": {
+        "type": "object",
+        "required": ["entries_loaded"],
+        "properties": {
+          "entries_loaded": { "type": "integer" },
+          "skipped_files": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "RegistrySearchRequest": {
+        "type": "object",
+        "required": ["capability"],
+        "properties": {
+          "capability": { "type": "string" }
+        }
+      },
+      "RegistrySearchResult": {
+        "type": "object",
+        "required": ["entries"],
+        "properties": {
+          "entries": { "type": "array", "items": { "type": "object" } }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "registry.local_manifest_registry",
+    "version": "0.1.0",
+    "purpose": "Local JSON manifest registry loader and capability index.",
+    "agent_usage": {
+      "when_to_use": "Use when a system stores manifest JSON files on disk and needs offline discovery by capability or metadata.",
+      "when_not_to_use": "Do not use for remote package registries, SQL-backed catalogs, or high-scale distributed search.",
+      "example_workflow": "1) Load a directory of manifest JSON files. 2) Validate and index them. 3) Search by capability or inspect the loaded entries."
+    },
+    "common_calls": [
+      {
+        "description": "Search a local registry by capability",
+        "method": "POST",
+        "path_or_command": "/api/v1/registry/search",
+        "input_example": { "capability": "embedding" },
+        "output_example": { "entries": [{ "manifest": { "capabilities": ["embedding"] }, "source_path": "/registry/a.json" }] }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Manifest file is invalid JSON or fails schema validation",
+        "symptom": "File is skipped and reported in skipped_files",
+        "recovery": "Fix the manifest file and reload the registry",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["registry", "manifest", "catalog", "local", "indexer"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Read .json files from a configured directory, validate each manifest through a pluggable validator, keep valid entries in memory, and allow simple capability-based filtering.",
+    "known_gotchas": "Manifest directories often contain partial or invalid files during editing. The loader should skip invalid entries without crashing the whole registry.",
+    "preferred_approach": "Separate file system loading from manifest validation so other manifest schemas can reuse the registry later.",
+    "avoid_approach": "Do not recursively scan unrelated directories and do not assume every JSON file is a valid manifest."
+  },
+  "test_cases": [
+    {
+      "name": "invalid manifest is skipped",
+      "input": { "method": "POST", "path": "/registry/load", "body": { "root_path": "/tmp/manifests" } },
+      "expected_status": 200
+    }
+  ]
+}

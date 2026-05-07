@@ -1,0 +1,125 @@
+{
+  "module_id": "artifact.download_bundle_builder",
+  "version": "0.1.0",
+  "category": "processing",
+  "capability_type": "generator",
+  "purpose": "Assemble a deterministic downloadable bundle from declared files and manifest metadata for end-user delivery or archival export.",
+  "reuse_scope": [
+    "portrait gallery downloads",
+    "analysis result exports",
+    "customer artifact delivery",
+    "workflow evidence packaging"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/bundles/build",
+        "input_schema": "BuildBundleRequest",
+        "output_schema": "BuildBundleResult",
+        "description": "Create a bundle from declared files and return its manifest plus output path."
+      }
+    ],
+    "schemas": {
+      "BuildBundleRequest": {
+        "type": "object",
+        "required": ["root_path", "files", "bundle_name"],
+        "properties": {
+          "root_path": { "type": "string" },
+          "bundle_name": { "type": "string" },
+          "files": { "type": "array", "items": { "type": "string" } },
+          "manifest": { "type": "object" }
+        }
+      },
+      "BuildBundleResult": {
+        "type": "object",
+        "required": ["bundle_path", "file_count"],
+        "properties": {
+          "bundle_path": { "type": "string" },
+          "file_count": { "type": "integer" }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "artifact.download_bundle_builder",
+    "version": "0.1.0",
+    "purpose": "Deterministic artifact bundle builder for downloads and exports.",
+    "agent_usage": {
+      "when_to_use": "Use when a workflow needs to package selected files into one user-facing or archive-ready bundle.",
+      "when_not_to_use": "Do not use for arbitrary filesystem backup, encrypted secret transport, or remote CDN publication.",
+      "example_workflow": "1) Select scoped files and a bundle name. 2) Call /bundles/build. 3) Serve or store the resulting bundle path."
+    },
+    "common_calls": [
+      {
+        "description": "Build a session download bundle",
+        "method": "POST",
+        "path_or_command": "/api/v1/bundles/build",
+        "input_example": { "root_path": "/exports/session-1", "bundle_name": "session-1.zip", "files": ["gallery/a.png", "manifest.json"] },
+        "output_example": { "bundle_path": "/exports/session-1/session-1.zip", "file_count": 2 }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Requested file is missing or outside the declared root",
+        "symptom": "400 error identifying the invalid file path",
+        "recovery": "Filter the file list to existing, in-scope artifacts",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["bundle", "download", "artifact", "export", "generator"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Resolve all requested files against root_path, reject out-of-scope entries, optionally include a machine-readable manifest file, and generate a deterministic zip archive with stable file ordering.",
+    "known_gotchas": "Bundles become nondeterministic if file order or timestamps vary. Missing files should fail early rather than silently producing partial downloads.",
+    "preferred_approach": "Build from an explicit file list and add files in sorted order to the archive.",
+    "avoid_approach": "Do not recursively zip an entire root blindly and do not follow symlinks outside the root."
+  },
+  "test_cases": [
+    {
+      "name": "out-of-scope file rejected",
+      "input": { "method": "POST", "path": "/bundles/build", "body": { "root_path": "/tmp/exports", "bundle_name": "x.zip", "files": ["../secret.txt"] } },
+      "expected_status": 400
+    }
+  ]
+}

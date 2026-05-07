@@ -1,0 +1,129 @@
+{
+  "module_id": "analysis.pipeline_manifest_parser",
+  "version": "0.1.0",
+  "category": "processing",
+  "capability_type": "analyzer",
+  "purpose": "Parse YAML pipeline manifests into normalized step graphs, validate dependencies, and surface cycles or malformed references before orchestration.",
+  "reuse_scope": [
+    "pipeline registries",
+    "scientific workflow catalogs",
+    "container orchestration manifests",
+    "multi-step analysis execution"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/pipeline-manifests/parse",
+        "input_schema": "PipelineManifestRequest",
+        "output_schema": "PipelineManifestResult",
+        "description": "Parse and validate a YAML pipeline manifest into a normalized graph model."
+      }
+    ],
+    "schemas": {
+      "PipelineManifestRequest": {
+        "type": "object",
+        "required": ["manifest_yaml"],
+        "properties": {
+          "manifest_yaml": { "type": "string" }
+        }
+      },
+      "PipelineManifestResult": {
+        "type": "object",
+        "required": ["manifest"],
+        "properties": {
+          "manifest": { "type": "object" },
+          "topological_order": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  },
+  "dependencies": [
+    {
+      "module_id": "npm:js-yaml",
+      "version_constraint": "^4.1.0",
+      "purpose": "Parse YAML pipeline manifest documents into typed JavaScript objects",
+      "required_at": "runtime"
+    }
+  ],
+  "sidecar_specification": {
+    "module_id": "analysis.pipeline_manifest_parser",
+    "version": "0.1.0",
+    "purpose": "YAML pipeline manifest parser and dependency validator.",
+    "agent_usage": {
+      "when_to_use": "Use when a workflow definition is stored as YAML and needs normalization before orchestration or catalog indexing.",
+      "when_not_to_use": "Do not use for arbitrary YAML storage, runtime execution itself, or binary pipeline package parsing.",
+      "example_workflow": "1) Provide a YAML manifest. 2) Call /pipeline-manifests/parse. 3) Use the normalized manifest and topological order in orchestration logic."
+    },
+    "common_calls": [
+      {
+        "description": "Parse a pipeline manifest",
+        "method": "POST",
+        "path_or_command": "/api/v1/pipeline-manifests/parse",
+        "input_example": { "manifest_yaml": "id: demo\nsteps:\n  - id: a\n    image: alpine\n  - id: b\n    image: alpine\n    depends_on: [a]\n" },
+        "output_example": { "manifest": { "id": "demo", "steps": [{ "id": "a" }, { "id": "b" }] }, "topological_order": ["a", "b"] }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Manifest omits required fields, references a missing step, or contains cycles",
+        "symptom": "400 error with the specific validation failure",
+        "recovery": "Correct the manifest before passing it to the orchestrator",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["pipeline", "manifest", "yaml", "graph", "analysis"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Use js-yaml to parse, require at minimum an id and a steps array, normalize missing step ids or names deterministically, and validate dependency references plus cycles with Kahn's algorithm.",
+    "known_gotchas": "Pipeline authors often mix image and container_image fields, omit step ids, or create hidden cycles through depends_on. Normalize first, then validate.",
+    "preferred_approach": "Return a normalized manifest shape that later modules can consume directly without reparsing raw YAML.",
+    "avoid_approach": "Do not execute the pipeline or pull container images in this module."
+  },
+  "test_cases": [
+    {
+      "name": "cyclic graph rejected",
+      "input": { "method": "POST", "path": "/pipeline-manifests/parse", "body": { "manifest_yaml": "id: demo\nsteps:\n  - id: a\n    image: alpine\n    depends_on: [b]\n  - id: b\n    image: alpine\n    depends_on: [a]\n" } },
+      "expected_status": 400
+    }
+  ]
+}

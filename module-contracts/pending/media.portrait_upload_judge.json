@@ -1,0 +1,125 @@
+{
+  "module_id": "media.portrait_upload_judge",
+  "version": "0.1.0",
+  "category": "processing",
+  "capability_type": "analyzer",
+  "purpose": "Judge portrait uploads for face presence, multiplicity, size, sharpness, lighting, occlusion, and embedding readiness before generation workflows continue.",
+  "reuse_scope": [
+    "portrait generation products",
+    "avatar onboarding flows",
+    "identity photo validation",
+    "face-driven upload quality gates"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/portrait-uploads/judge",
+        "input_schema": "PortraitJudgeRequest",
+        "output_schema": "PortraitJudgeResult",
+        "description": "Evaluate one portrait upload using face detection, face scoring, and optional embedding generation."
+      }
+    ],
+    "schemas": {
+      "PortraitJudgeRequest": {
+        "type": "object",
+        "required": ["image_base64"],
+        "properties": {
+          "image_base64": { "type": "string" }
+        }
+      },
+      "PortraitJudgeResult": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "type": "string", "enum": ["accepted", "rejected"] },
+          "rejection_reason": { "type": "string" },
+          "face_quality_score": { "type": "number" },
+          "embedding_dimensions": { "type": "integer" }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "media.portrait_upload_judge",
+    "version": "0.1.0",
+    "purpose": "Portrait upload quality gate based on face and image quality signals.",
+    "agent_usage": {
+      "when_to_use": "Use after receiving a portrait photo and before preview or final generation jobs are queued.",
+      "when_not_to_use": "Do not use for forensic identity verification, biometric matching across people, or generic document image QA.",
+      "example_workflow": "1) Decode upload bytes. 2) Run /portrait-uploads/judge. 3) Accept only when status is accepted and quality score meets policy."
+    },
+    "common_calls": [
+      {
+        "description": "Judge a portrait upload",
+        "method": "POST",
+        "path_or_command": "/api/v1/portrait-uploads/judge",
+        "input_example": { "image_base64": "..." },
+        "output_example": { "status": "accepted", "face_quality_score": 0.83, "embedding_dimensions": 512 }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "No face, multiple faces, low sharpness, poor light, or high occlusion",
+        "symptom": "status rejected with a specific rejection_reason",
+        "recovery": "Ask the user for a clearer, single-subject portrait and retry",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["portrait", "face", "quality", "uploads", "analyzer"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Compose a face detector, face scoring provider, and optional embedder. Reject when zero or multiple faces are detected, area_ratio is too small, sharpness is too low, light balance is too low, or occlusion exceeds threshold.",
+    "known_gotchas": "A face detector can succeed while the quality score still makes the image unsuitable for generation. Keep thresholds explicit and test deterministic fake providers.",
+    "preferred_approach": "Return concrete rejection reasons such as no_face, multiple_faces, face_too_small, low_sharpness, low_light, or occlusion.",
+    "avoid_approach": "Do not silently accept borderline uploads and do not mix this module with payment or session lifecycle logic."
+  },
+  "test_cases": [
+    {
+      "name": "multiple faces rejected",
+      "input": { "method": "POST", "path": "/portrait-uploads/judge", "body": { "image_base64": "fixture-with-multiple-faces" } },
+      "expected_status": 200,
+      "expected_body": { "status": "rejected", "rejection_reason": "multiple_faces" }
+    }
+  ]
+}

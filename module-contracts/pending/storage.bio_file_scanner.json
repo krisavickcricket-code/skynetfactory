@@ -1,0 +1,125 @@
+{
+  "module_id": "storage.bio_file_scanner",
+  "version": "0.1.0",
+  "category": "storage",
+  "capability_type": "analyzer",
+  "purpose": "Classify bioinformatics and scientific file uploads by signature and extension while blocking obvious executables and unsafe script payloads.",
+  "reuse_scope": [
+    "omics dataset ingestion",
+    "scientific platform uploads",
+    "pipeline input screening",
+    "lab file intake validation"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/bio-files/scan",
+        "input_schema": "BioFileScanRequest",
+        "output_schema": "BioFileScanResult",
+        "description": "Scan a file header and filename to detect likely format and block dangerous content types."
+      }
+    ],
+    "schemas": {
+      "BioFileScanRequest": {
+        "type": "object",
+        "required": ["filename", "header_base64"],
+        "properties": {
+          "filename": { "type": "string" },
+          "header_base64": { "type": "string" }
+        }
+      },
+      "BioFileScanResult": {
+        "type": "object",
+        "required": ["is_valid", "warnings"],
+        "properties": {
+          "is_valid": { "type": "boolean" },
+          "detected_format": { "type": "string" },
+          "warnings": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "storage.bio_file_scanner",
+    "version": "0.1.0",
+    "purpose": "Scientific file signature scanner with executable blocking and format hints.",
+    "agent_usage": {
+      "when_to_use": "Use before accepting scientific files into storage or pipeline execution queues.",
+      "when_not_to_use": "Do not use as a malware scanner, decompressor, or full content validator for every scientific format.",
+      "example_workflow": "1) Read the initial bytes from an uploaded file. 2) Call /bio-files/scan with filename and header bytes. 3) Reject or route based on the result."
+    },
+    "common_calls": [
+      {
+        "description": "Scan a BAM upload",
+        "method": "POST",
+        "path_or_command": "/api/v1/bio-files/scan",
+        "input_example": { "filename": "sample.bam", "header_base64": "QkFN" },
+        "output_example": { "is_valid": true, "detected_format": "bam", "warnings": [] }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Declared extension mismatches detected format",
+        "symptom": "is_valid false with mismatch warning",
+        "recovery": "Rename the file correctly or inspect whether the bytes are corrupted",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["bioinformatics", "uploads", "file-scan", "omics", "storage"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Decode the header bytes, detect blocked PE executables and shell scripts first, then match binary signatures like BAM or CRAM and text signatures like FASTQ, FASTA, VCF, PDB, CIF, and SDF. Keep mismatch handling deterministic.",
+    "known_gotchas": "Compressed extensions such as .fastq.gz and .vcf.gz need suffix-aware extension parsing. Some scientific formats are text and need signature checks on trimmed text, not just magic bytes.",
+    "preferred_approach": "Return a light classification result with warnings instead of attempting heavy parsing at upload time.",
+    "avoid_approach": "Do not unzip, execute, or auto-correct unknown uploads in this module."
+  },
+  "test_cases": [
+    {
+      "name": "shell script blocked",
+      "input": { "method": "POST", "path": "/bio-files/scan", "body": { "filename": "run.sh", "header_base64": "IyEvYmluL3No" } },
+      "expected_status": 200,
+      "expected_body": { "is_valid": false, "detected_format": "shell_script" }
+    }
+  ]
+}

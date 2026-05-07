@@ -1,0 +1,127 @@
+{
+  "module_id": "billing.entitlement_evaluator",
+  "version": "0.1.0",
+  "category": "security",
+  "capability_type": "validator",
+  "purpose": "Evaluate whether an organization or account is entitled to perform an action based on plan tier, usage, storage, concurrency, and feature access.",
+  "reuse_scope": [
+    "SaaS feature gating",
+    "compute access checks",
+    "storage quota enforcement",
+    "subscription-aware workflow launches"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/entitlements/evaluate",
+        "input_schema": "EntitlementRequest",
+        "output_schema": "EntitlementResult",
+        "description": "Evaluate whether the requested action is allowed under the current plan and usage snapshot."
+      }
+    ],
+    "schemas": {
+      "EntitlementRequest": {
+        "type": "object",
+        "required": ["plan", "action", "usage"],
+        "properties": {
+          "plan": { "type": "object" },
+          "action": { "type": "string" },
+          "requested_quantity": { "type": "integer" },
+          "usage": { "type": "object" }
+        }
+      },
+      "EntitlementResult": {
+        "type": "object",
+        "required": ["allowed", "remaining"],
+        "properties": {
+          "allowed": { "type": "boolean" },
+          "remaining": { "type": "number" },
+          "reason": { "type": "string" }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "billing.entitlement_evaluator",
+    "version": "0.1.0",
+    "purpose": "Plan-aware entitlement and quota evaluator for gated actions.",
+    "agent_usage": {
+      "when_to_use": "Use before starting paid or quota-limited operations such as runs, GPU tasks, uploads, or premium features.",
+      "when_not_to_use": "Do not use as the billing ledger itself, checkout processor, or invoice generator.",
+      "example_workflow": "1) Build a plan descriptor and current usage snapshot. 2) Call /entitlements/evaluate with an action. 3) Proceed only when allowed is true."
+    },
+    "common_calls": [
+      {
+        "description": "Evaluate a monthly pipeline run request",
+        "method": "POST",
+        "path_or_command": "/api/v1/entitlements/evaluate",
+        "input_example": { "plan": { "max_monthly_runs": 10 }, "action": "pipeline_run", "requested_quantity": 1, "usage": { "monthly_runs": 4 } },
+        "output_example": { "allowed": true, "remaining": 6, "reason": null }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Requested quantity exceeds remaining plan allowance",
+        "symptom": "allowed false with a limit reason",
+        "recovery": "Reduce the request or upgrade the plan",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["billing", "entitlements", "quota", "plans", "validator"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Keep evaluation pure by passing a normalized plan object and usage snapshot into the module. Support action types like pipeline_run, concurrent_run, storage_write, gpu_run, or custom feature flags.",
+    "known_gotchas": "Mixing live database reads into the evaluator makes it harder to test and reuse. Remaining quota may be count-based, byte-based, or feature-flag based.",
+    "preferred_approach": "Model plan limits explicitly and compute remaining allowance per action with deterministic numeric rules.",
+    "avoid_approach": "Do not embed checkout, subscriptions syncing, or provider webhooks in this module."
+  },
+  "test_cases": [
+    {
+      "name": "deny when monthly run limit reached",
+      "input": { "method": "POST", "path": "/entitlements/evaluate", "body": { "plan": { "max_monthly_runs": 5 }, "action": "pipeline_run", "requested_quantity": 1, "usage": { "monthly_runs": 5 } } },
+      "expected_status": 200,
+      "expected_body": { "allowed": false, "remaining": 0 }
+    }
+  ]
+}

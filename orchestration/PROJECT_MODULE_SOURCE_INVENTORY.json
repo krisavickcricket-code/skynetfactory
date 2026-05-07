@@ -1,0 +1,97 @@
+{
+  "generated_at": "2026-05-07T17:16:19.4330863Z",
+  "purpose": "Inventory of reusable module candidates harvested from active C drive projects. This is a source-mining artifact, not a contract schema.",
+  "projects": [
+    {
+      "project_id": "ai_portrait_studio",
+      "path": "C:/AI Portrait Studio",
+      "candidate_modules": [
+        "security.upload_token_issuer",
+        "media.portrait_upload_judge",
+        "media.subject_embedding_updater",
+        "billing.payment_reconciliation",
+        "media.preview_generation_dispatcher",
+        "artifact.download_bundle_builder",
+        "integration.email_notification_dispatcher"
+      ]
+    },
+    {
+      "project_id": "darwinomics",
+      "path": "C:/DarwinOmics",
+      "candidate_modules": [
+        "storage.bio_file_scanner",
+        "analysis.pipeline_manifest_parser",
+        "analysis.pipeline_recommendation_engine",
+        "billing.entitlement_evaluator",
+        "agent.capability_manifest_provider",
+        "storage.presigned_upload_gateway",
+        "orchestration.job_queue_gateway",
+        "provenance.run_manifest_generator",
+        "registry.pipeline_catalog_indexer",
+        "retrieval.rag_context_builder"
+      ]
+    },
+    {
+      "project_id": "research_planner",
+      "path": "C:/Research Planner",
+      "candidate_modules": [
+        "research.query_generation_planner",
+        "research.evidence_bundle_generator",
+        "storage.workspace_artifact_store",
+        "workflow.tool_broker_authorizer",
+        "workflow.mock_search_adapter",
+        "workflow.spec_lint_reviewer"
+      ]
+    },
+    {
+      "project_id": "skycaptain",
+      "path": "C:/SkyCaptain",
+      "candidate_modules": [
+        "planning.task_plan_generator",
+        "registry.module_graph_builder"
+      ]
+    },
+    {
+      "project_id": "cricnode_tracker",
+      "path": "C:/CricNode Tracker",
+      "candidate_modules": [
+        "registry.local_manifest_registry",
+        "workflow.product_workflow_service",
+        "health.service_status_reporter",
+        "validation.domain_manifest_validator"
+      ]
+    },
+    {
+      "project_id": "supercoder_3",
+      "path": "C:/SuperCoder 3.0",
+      "candidate_modules": [
+        "workflow.state_transition_manager",
+        "workflow.step_registry_provider",
+        "artifact.download_bundle_builder",
+        "validation.portrait_flow_validator",
+        "media.portrait_generation_judge",
+        "integration.webhook_signature_verifier",
+        "security.upload_token_issuer"
+      ]
+    }
+  ],
+  "status": {
+    "contracts_already_written": [
+      "agent.capability_manifest_provider",
+      "integration.webhook_signature_verifier",
+      "orchestration.job_queue_gateway",
+      "provenance.run_manifest_generator",
+      "storage.presigned_upload_gateway"
+    ],
+    "contracts_to_write_next": [
+      "security.upload_token_issuer",
+      "media.portrait_upload_judge",
+      "storage.bio_file_scanner",
+      "analysis.pipeline_manifest_parser",
+      "billing.entitlement_evaluator",
+      "registry.local_manifest_registry",
+      "artifact.download_bundle_builder",
+      "research.evidence_bundle_generator"
+    ]
+  }
+}

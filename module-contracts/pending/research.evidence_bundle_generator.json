@@ -1,0 +1,125 @@
+{
+  "module_id": "research.evidence_bundle_generator",
+  "version": "0.1.0",
+  "category": "data",
+  "capability_type": "generator",
+  "purpose": "Generate a structured evidence bundle summarizing search results, selected sources, prompts, outputs, and review artifacts for research and planning workflows.",
+  "reuse_scope": [
+    "research planning pipelines",
+    "agent audit trails",
+    "analysis evidence packs",
+    "spec-generation provenance"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/research/evidence-bundles",
+        "input_schema": "EvidenceBundleRequest",
+        "output_schema": "EvidenceBundleResult",
+        "description": "Generate a normalized evidence bundle object from a research or planning run."
+      }
+    ],
+    "schemas": {
+      "EvidenceBundleRequest": {
+        "type": "object",
+        "required": ["request_id", "sources", "artifacts"],
+        "properties": {
+          "request_id": { "type": "string" },
+          "sources": { "type": "array", "items": { "type": "object" } },
+          "artifacts": { "type": "array", "items": { "type": "object" } },
+          "reviews": { "type": "array", "items": { "type": "object" } }
+        }
+      },
+      "EvidenceBundleResult": {
+        "type": "object",
+        "required": ["bundle"],
+        "properties": {
+          "bundle": { "type": "object" }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "research.evidence_bundle_generator",
+    "version": "0.1.0",
+    "purpose": "Structured evidence bundle generator for research and planning workflows.",
+    "agent_usage": {
+      "when_to_use": "Use at the end of a research or planning run when the workflow needs a portable record of what evidence supported the output.",
+      "when_not_to_use": "Do not use as a search engine, citation validator, or long-term storage backend by itself.",
+      "example_workflow": "1) Collect research sources, output artifacts, and reviewer notes. 2) Call /research/evidence-bundles. 3) Store the returned bundle alongside the run manifest."
+    },
+    "common_calls": [
+      {
+        "description": "Generate an evidence bundle for a planning run",
+        "method": "POST",
+        "path_or_command": "/api/v1/research/evidence-bundles",
+        "input_example": { "request_id": "req-1", "sources": [], "artifacts": [] },
+        "output_example": { "bundle": { "request_id": "req-1", "sources": [], "artifacts": [] } }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Sources or artifacts are missing required metadata",
+        "symptom": "400 error listing incomplete evidence entries",
+        "recovery": "Normalize and enrich source metadata before bundle generation",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["research", "evidence", "audit", "planning", "generator"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Generate one canonical bundle object containing request metadata, sources, artifacts, reviews, and derived summary counts. Keep field names stable for downstream consumers.",
+    "known_gotchas": "Evidence artifacts often mix URLs, local paths, and free text notes. Normalization matters if the bundle will be validated later by another system.",
+    "preferred_approach": "Model sources and artifacts explicitly and include enough metadata for later audit without duplicating the full source content.",
+    "avoid_approach": "Do not scrape sources inside this module and do not silently discard incomplete evidence entries."
+  },
+  "test_cases": [
+    {
+      "name": "minimal evidence bundle",
+      "input": { "method": "POST", "path": "/research/evidence-bundles", "body": { "request_id": "req-1", "sources": [], "artifacts": [] } },
+      "expected_status": 200,
+      "expected_body": { "bundle": { "request_id": "req-1" } }
+    }
+  ]
+}
