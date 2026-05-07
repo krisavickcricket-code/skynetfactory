@@ -1,0 +1,45 @@
+{
+  "module_id": "examples.hello_world",
+  "version": "0.1.0",
+  "category": "example",
+  "capability_type": "service",
+  "purpose": "A minimal example module that exposes a single health-check endpoint. Used to validate the SkyNetFactory pipeline end-to-end.",
+  "reuse_scope": ["testing and validation only"],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "endpoints": [
+      { "method": "GET", "path": "/health", "description": "Returns 200 OK with a JSON status payload" }
+    ]
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "purpose": "Pipeline validation fixture",
+    "agent_usage": {
+      "when_to_use": "Never in production",
+      "when_not_to_use": "Any production scenario"
+    },
+    "common_calls": [
+      { "description": "Health check", "method": "GET", "path_or_command": "/health" }
+    ],
+    "failure_modes": [
+      { "condition": "Service down", "symptom": "Connection refused", "recovery": "Restart the service" }
+    ],
+    "composition_tags": ["example", "health-check", "validator"]
+  },
+  "acceptance_gates": ["structure_validation", "contract_validation"],
+  "vm_test_requirements": {
+    "dockerfile_required": false,
+    "compose_required": false,
+    "must_exit_zero": true
+  },
+  "forbidden_behaviors": [],
+  "network_requirements": {
+    "requires_network": false,
+    "allow_localhost": true
+  },
+  "agent_notes": {
+    "implementation_hint": "Keep it minimal — single Express/Fastify route returning { status: 'ok' }",
+    "known_gotchas": "None"
+  }
+}

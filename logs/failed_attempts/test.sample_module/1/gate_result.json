@@ -1,0 +1,19 @@
+{
+  "module_id": "test.sample_module",
+  "overall_result": "fail",
+  "individual_results": [
+    {
+      "gate_name": "structure_validation",
+      "result": "fail",
+      "details": "Missing paths: Dockerfile, docker-compose.test.yml, README.md, tsconfig.json",
+      "duration_ms": 1
+    },
+    {
+      "gate_name": "contract_validation",
+      "result": "fail",
+      "details": "Validation error: no schema with key or ref \"https://json-schema.org/draft/2020-12/schema\"",
+      "duration_ms": 6
+    }
+  ],
+  "timestamp": "2026-05-07T03:06:14.422Z"
+}

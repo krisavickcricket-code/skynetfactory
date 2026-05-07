@@ -22,6 +22,7 @@ import { contractToAgentSwarmTask, submitTaskToAgentSwarm, isAgentSwarmAvailable
 import { getHealthSummary } from '../src/health-checks.js';
 import { getCircuitBreakerState, onCircuitBreakerChange } from '../src/circuit-breaker.js';
 import { RegistryEntry } from '../src/registry.js';
+import { compileModuleContractValidator, formatSchemaErrors } from '../src/schema-validation.js';
 
 const ROOT = ROOT_DIR;
 const PORT = 3013;
@@ -104,6 +105,35 @@ export async function createApiServer(): Promise<FastifyInstance> {
     return { status: 'success', data: { contract, state } };
   });
 
+  // POST /contracts/validate — Pre-flight validation without submitting
+  app.post('/skynetfactory/api/contracts/validate', async (request, reply) => {
+    const body = request.body as Record<string, unknown>;
+    const moduleId = body.module_id as string;
+
+    if (!moduleId) {
+      reply.code(400);
+      return { status: 'error', error: { code: 'INVALID_CONTRACT', message: 'module_id is required' } };
+    }
+
+    const errors: string[] = [];
+
+    try {
+      const validate = await compileModuleContractValidator();
+      if (!validate(body)) {
+        errors.push(...formatSchemaErrors(validate.errors));
+      }
+    } catch (err: any) {
+      errors.push(`Schema validation error: ${err.message}`);
+    }
+
+    if (errors.length > 0) {
+      reply.code(422);
+      return { status: 'error', valid: false, errors };
+    }
+
+    return { status: 'success', valid: true, module_id: moduleId };
+  });
+
   // POST /contracts - Submit new contract
   app.post('/skynetfactory/api/contracts', async (request, reply) => {
     const body = request.body as Record<string, unknown>;
@@ -126,12 +156,7 @@ export async function createApiServer(): Promise<FastifyInstance> {
 
     // Validate against schema
     try {
-      const Ajv = await import('ajv');
-      const ajv = new Ajv.default();
-      const addFormats = await import('ajv-formats');
-      addFormats.default(ajv);
-      const schema = JSON.parse(readFileSync(join(ROOT_DIR, 'module-contracts/_instructions/MODULE_CONTRACT_SCHEMA.json'), 'utf-8'));
-      const validate = ajv.compile(schema);
+      const validate = await compileModuleContractValidator();
       if (!validate(body)) {
         reply.code(422);
         return { status: 'error', error: { code: 'CONTRACT_SCHEMA_INVALID', message: JSON.stringify(validate.errors) } };
@@ -303,6 +328,20 @@ export async function createApiServer(): Promise<FastifyInstance> {
         circuit_breaker: breaker,
       },
     };
+  });
+
+  // GET /ollama/models - Proxy to Ollama model list
+  app.get('/skynetfactory/api/ollama/models', async (request, reply) => {
+    const config = getConfig();
+    const ollamaUrl = config.ollama_host_url || 'http://localhost:11434';
+    try {
+      const response = await fetch(`${ollamaUrl}/api/tags`);
+      const data = await response.json();
+      return { status: 'success', data };
+    } catch (err: any) {
+      reply.code(502);
+      return { status: 'error', error: { code: 'OLLAMA_UNREACHABLE', message: err.message } };
+    }
   });
 
   // GET /config - Current configuration

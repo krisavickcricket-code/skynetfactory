@@ -1,0 +1,23 @@
+{
+  "task_id": "task-test.sample_module-1778123174406",
+  "module_id": "test.sample_module",
+  "status": "failed",
+  "changed_files": [],
+  "evidence": {
+    "model_used": "qwen3-coder",
+    "prompt_hash": "942313cf73e13a224db096701999887ffca0ee6c08ed3643343768ebe5d6f10d",
+    "write_scope_declared": [
+      "C:\\SkynetFactory\\worktrees\\test.sample_module/**",
+      "C:\\SkynetFactory\\logs\\test.sample_module/**"
+    ],
+    "commands_executed": [],
+    "files_written_log": [],
+    "duration_ms": 0
+  },
+  "known_issues": [
+    {
+      "description": "Ollama call failed: Ollama API error: 404 Not Found",
+      "severity": "critical"
+    }
+  ]
+}

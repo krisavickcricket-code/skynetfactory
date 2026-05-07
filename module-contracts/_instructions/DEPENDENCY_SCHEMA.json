@@ -11,6 +11,7 @@
       "description": "SkyNetFactory module dependency, or 'npm:<package>', 'pip:<package>', 'go:<module>' for externals"
     },
     "version_constraint": { "type": "string" },
+    "purpose": { "type": "string", "description": "Why this dependency is needed (injected into LLM prompt)" },
     "required_at": { "type": "string", "enum": ["build","runtime","test"], "default": "runtime" },
     "optional": { "type": "boolean", "default": false }
   }

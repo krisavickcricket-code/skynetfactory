@@ -61,6 +61,8 @@
   },
   "dependencies": [],
   "sidecar_specification": {
+    "module_id": "storage.integrity_verifier",
+    "version": "0.1.0",
     "purpose": "Verify copied artifacts against checksum manifests to detect corruption or tampering.",
     "agent_usage": {
       "when_to_use": "When you need to verify that files were copied or transferred without corruption. Ideal after backup operations, deployment pushes, or data migrations.",

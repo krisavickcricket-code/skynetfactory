@@ -25,8 +25,20 @@ function App() {
   const [registry, setRegistry] = useState<any[]>([]);
   const [health, setHealth] = useState<Record<string, HealthStatus>>({});
   const [circuitBreaker, setCircuitBreaker] = useState<CircuitBreakerState>({ state: 'closed', failure_count: 0 });
-  const [activeView, setActiveView] = useState<'dashboard' | 'pipeline' | 'registry' | 'settings'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'pipeline' | 'registry' | 'authoring' | 'settings'>('dashboard');
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
+
+  // Supervisor + config state
+  const [configData, setConfigData] = useState<any>(null);
+  const [ollamaModels, setOllamaModels] = useState<string[]>([]);
+  const [supervisorRunning, setSupervisorRunning] = useState<boolean>(false);
+  const [supervisorLogs, setSupervisorLogs] = useState<string[]>([]);
+  const [isSavingConfig, setIsSavingConfig] = useState<boolean>(false);
+
+  // Draft contract form state
+  const [draftContractStr, setDraftContractStr] = useState('');
+  const [draftValidationResult, setDraftValidationResult] = useState<any>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Fetch data
   const fetchContracts = useCallback(async () => {
@@ -104,9 +116,64 @@ function App() {
     };
   }, []);
 
+  // Supervisor IPC listeners + status polling
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (!api) return;
+
+    checkSupervisorStatus();
+    const statusInterval = setInterval(checkSupervisorStatus, 3000);
+
+    const onOutput = (_event: any, data: string) => {
+      setSupervisorLogs(prev => [...prev.slice(-199), data]);
+    };
+    const onError = (_event: any, data: string) => {
+      setSupervisorLogs(prev => [...prev.slice(-199), `[STDERR] ${data}`]);
+    };
+    const onExit = (_event: any, code: number | null) => {
+      setSupervisorRunning(false);
+      setSupervisorLogs(prev => [...prev.slice(-199), `[UI] Supervisor exited with code ${code}`]);
+    };
+
+    api.onSupervisorOutput(onOutput);
+    api.onSupervisorError(onError);
+    api.onSupervisorExit(onExit);
+
+    return () => {
+      clearInterval(statusInterval);
+    };
+  }, []);
+
+  // Config + model fetching
+  const fetchConfig = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/config`);
+      const data = await res.json();
+      if (data.status === 'success') setConfigData(data.data);
+    } catch {}
+  }, []);
+
+  const fetchOllamaModels = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/ollama/models`);
+      const data = await res.json();
+      if (data.status === 'success') {
+        const models = data.data.models?.map((m: any) => m.name) || [];
+        setOllamaModels(models);
+      }
+    } catch {}
+  }, []);
+
+  // Load config + models when settings tab opens
+  useEffect(() => {
+    if (activeView === 'settings') {
+      fetchConfig();
+      fetchOllamaModels();
+    }
+  }, [activeView, fetchConfig, fetchOllamaModels]);
+
   // Actions
   const submitContract = async () => {
-    // In a real UI, this would open a form dialog
     alert('Contract submission via UI: use POST /skynetfactory/api/contracts');
   };
 
@@ -123,6 +190,53 @@ function App() {
   const deprecateModule = async (moduleId: string) => {
     await fetch(`${API_BASE}/registry/${moduleId}/deprecate`, { method: 'POST' });
     fetchRegistry();
+  };
+
+  // Supervisor IPC helpers
+  const checkSupervisorStatus = async () => {
+    try {
+      const api = (window as any).electronAPI;
+      if (api?.supervisorStatus) {
+        const status = await api.supervisorStatus();
+        setSupervisorRunning(status.running);
+      }
+    } catch {}
+  };
+
+  const startSupervisor = async () => {
+    try {
+      const api = (window as any).electronAPI;
+      if (api?.supervisorStart) {
+        setSupervisorLogs(prev => [...prev, '[UI] Starting supervisor...']);
+        const result = await api.supervisorStart();
+        if (result.success) {
+          setSupervisorRunning(true);
+          setSupervisorLogs(prev => [...prev, `[UI] Supervisor started (PID ${result.pid})`]);
+        } else {
+          setSupervisorLogs(prev => [...prev, `[UI] Start failed: ${result.error}`]);
+        }
+      }
+    } catch (err: any) {
+      setSupervisorLogs(prev => [...prev, `[UI] Error: ${err.message}`]);
+    }
+  };
+
+  const stopSupervisor = async () => {
+    try {
+      const api = (window as any).electronAPI;
+      if (api?.supervisorStop) {
+        setSupervisorLogs(prev => [...prev, '[UI] Stopping supervisor...']);
+        const result = await api.supervisorStop();
+        if (result.success) {
+          setSupervisorRunning(false);
+          setSupervisorLogs(prev => [...prev, '[UI] Supervisor stopped']);
+        } else {
+          setSupervisorLogs(prev => [...prev, `[UI] Stop failed: ${result.error}`]);
+        }
+      }
+    } catch (err: any) {
+      setSupervisorLogs(prev => [...prev, `[UI] Error: ${err.message}`]);
+    }
   };
 
   // Counts
@@ -144,7 +258,7 @@ function App() {
           🏭 SkyNetFactory
         </h1>
         <nav className="flex gap-2">
-          {(['dashboard', 'pipeline', 'registry', 'settings'] as const).map(view => (
+          {(['dashboard', 'pipeline', 'registry', 'authoring', 'settings'] as const).map(view => (
             <button
               key={view}
               className={`btn ${activeView === view ? 'btn-primary' : ''}`}
@@ -256,13 +370,268 @@ function App() {
         </div>
       )}
 
-      {activeView === 'settings' && (
-        <div className="card">
-          <h2 style={{ marginBottom: '1rem' }}>Settings</h2>
-          <p style={{ color: 'var(--color-text-muted)' }}>Configuration is managed at <code>C:/SkynetFactory/config/builder.config.json</code></p>
-          <p style={{ color: 'var(--color-text-muted)', marginTop: '0.5rem' }}>
-            Or update at runtime via <code>PUT /skynetfactory/api/config</code>
+      {activeView === 'authoring' && (
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <h2>Draft New Contract</h2>
+          <p style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
+            Paste a module contract JSON below. Use <code>Validate</code> to check against the schema before submitting.
+            See <code>config/codex-contract-authoring-prompt.txt</code> for authoring guidance.
           </p>
+          <textarea
+            value={draftContractStr}
+            onChange={(e) => setDraftContractStr(e.target.value)}
+            placeholder={JSON.stringify({
+              module_id: "domain.capability",
+              version: "1.0.0",
+              category: "example",
+              capability_type: "validator",
+              purpose: "Describe what this module does in 20+ characters.",
+              language: "typescript",
+              runtime: "node",
+              api: { endpoints: [{ method: "GET", path: "/health", description: "Health check" }] },
+              acceptance_gates: ["structure_validation", "contract_validation"]
+            }, null, 2)}
+            style={{
+              width: '100%',
+              minHeight: '300px',
+              background: '#0f172a',
+              color: '#e2e8f0',
+              border: '1px solid #334155',
+              borderRadius: '0.375rem',
+              padding: '0.75rem',
+              fontFamily: 'monospace',
+              fontSize: '0.875rem',
+              resize: 'vertical',
+            }}
+          />
+          <div className="flex items-center gap-3" style={{ marginTop: '0.5rem' }}>
+            <button
+              className="btn"
+              style={{ background: '#475569' }}
+              onClick={async () => {
+                setDraftValidationResult(null);
+                try {
+                  const payload = JSON.parse(draftContractStr);
+                  const res = await fetch(`${API_BASE}/contracts/validate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                  });
+                  const data = await res.json();
+                  setDraftValidationResult(data);
+                } catch (err: any) {
+                  setDraftValidationResult({ status: 'error', valid: false, errors: [`JSON parse error: ${err.message}`] });
+                }
+              }}
+            >
+              Validate Contract
+            </button>
+            <button
+              className="btn btn-primary"
+              style={{ background: 'var(--color-primary)' }}
+              onClick={async () => {
+                setIsSubmitting(true);
+                setDraftValidationResult(null);
+                try {
+                  const payload = JSON.parse(draftContractStr);
+                  const res = await fetch(`${API_BASE}/contracts`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                  });
+                  const data = await res.json();
+                  if (data.status === 'success') {
+                    setDraftValidationResult({ status: 'success', message: `Contract submitted: ${data.data.module_id}` });
+                    setDraftContractStr('');
+                    fetchContracts();
+                  } else {
+                    setDraftValidationResult({ status: 'error', errors: [JSON.stringify(data.error)] });
+                  }
+                } catch (err: any) {
+                  setDraftValidationResult({ status: 'error', errors: [`Submit error: ${err.message}`] });
+                } finally { setIsSubmitting(false); }
+              }}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Submitting...' : 'Submit Contract'}
+            </button>
+            <button
+              className="btn"
+              style={{ background: '#1e293b' }}
+              onClick={() => {
+                setDraftContractStr('');
+                setDraftValidationResult(null);
+              }}
+            >
+              Clear
+            </button>
+          </div>
+
+          {draftValidationResult && (
+            <div style={{
+              marginTop: '0.75rem',
+              padding: '0.75rem',
+              borderRadius: '0.375rem',
+              background: draftValidationResult.status === 'success' ? '#064e3b' : '#450a0a',
+              border: `1px solid ${draftValidationResult.status === 'success' ? '#059669' : '#dc2626'}`,
+            }}>
+              {draftValidationResult.status === 'success' ? (
+                <span>✅ {draftValidationResult.message || 'Contract is valid!'}</span>
+              ) : (
+                <div>
+                  <div style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>❌ Validation Failed</div>
+                  <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.875rem' }}>
+                    {(draftValidationResult.errors || []).map((err: string, i: number) => (
+                      <li key={i}>{err}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeView === 'settings' && (
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {/* Supervisor Control */}
+          <div>
+            <h2 style={{ marginBottom: '0.75rem' }}>Supervisor Control</h2>
+            <div className="flex items-center gap-3" style={{ marginBottom: '0.75rem' }}>
+              <span className={`health-dot health-${supervisorRunning ? 'healthy' : 'unhealthy'}`} />
+              <span style={{ fontWeight: 500 }}>
+                {supervisorRunning ? 'Running' : 'Stopped'}
+              </span>
+              <button
+                className="btn"
+                style={{ background: 'var(--color-primary)', marginLeft: 'auto' }}
+                onClick={supervisorRunning ? stopSupervisor : startSupervisor}
+              >
+                {supervisorRunning ? 'Stop Supervisor' : 'Start Supervisor'}
+              </button>
+            </div>
+            {supervisorLogs.length > 0 && (
+              <pre style={{
+                background: '#0f172a',
+                color: '#e2e8f0',
+                padding: '0.75rem',
+                borderRadius: '0.375rem',
+                fontSize: '0.75rem',
+                maxHeight: '200px',
+                overflow: 'auto',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+              }}>
+                {supervisorLogs.join('')}
+              </pre>
+            )}
+          </div>
+
+          <hr style={{ border: 'none', borderTop: '1px solid #334155' }} />
+
+          {/* LLM Configuration */}
+          <div>
+            <h2 style={{ marginBottom: '0.75rem' }}>LLM Configuration</h2>
+            {configData ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.25rem' }}>Default Ollama Model</label>
+                  <select
+                    className="btn"
+                    style={{ width: '100%', background: 'var(--color-surface)', color: 'var(--color-text)' }}
+                    value={configData.default_ollama_model || ''}
+                    onChange={(e) => setConfigData({ ...configData, default_ollama_model: e.target.value })}
+                  >
+                    {ollamaModels.length === 0 && (
+                      <option value={configData.default_ollama_model}>{configData.default_ollama_model}</option>
+                    )}
+                    {ollamaModels.map((m: string) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <label style={{ fontSize: '0.875rem' }}>Fallback Models:</label>
+                  <span style={{ color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
+                    {(configData.fallback_models || []).join(', ')}
+                  </span>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.25rem' }}>
+                    Temperature: {configData.default_temperature ?? 0.1}
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={configData.default_temperature ?? 0.1}
+                    onChange={(e) => setConfigData({ ...configData, default_temperature: parseFloat(e.target.value) })}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="seedControl"
+                    checked={configData.seed_control ?? true}
+                    onChange={(e) => setConfigData({ ...configData, seed_control: e.target.checked })}
+                  />
+                  <label htmlFor="seedControl" style={{ fontSize: '0.875rem' }}>Seed Control (deterministic retry rotation)</label>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="ollamaHost"
+                    disabled
+                    checked
+                  />
+                  <label htmlFor="ollamaHost" style={{ fontSize: '0.875rem' }}>
+                    Ollama Host: {configData.ollama_host_url || 'http://localhost:11434'}
+                  </label>
+                </div>
+
+                <button
+                  className="btn btn-primary"
+                  style={{ marginTop: '0.5rem', background: 'var(--color-primary)' }}
+                  onClick={async () => {
+                    setIsSavingConfig(true);
+                    try {
+                      const res = await fetch(`${API_BASE}/config`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          default_ollama_model: configData.default_ollama_model,
+                          default_temperature: configData.default_temperature,
+                          seed_control: configData.seed_control,
+                        }),
+                      });
+                      const data = await res.json();
+                      if (data.status === 'success') {
+                        setConfigData(data.data);
+                        setSupervisorLogs(prev => [...prev, '[UI] Config saved successfully']);
+                      } else {
+                        setSupervisorLogs(prev => [...prev, `[UI] Save failed: ${JSON.stringify(data.error)}`]);
+                      }
+                    } catch (err: any) {
+                      setSupervisorLogs(prev => [...prev, `[UI] Save error: ${err.message}`]);
+                    } finally {
+                      setIsSavingConfig(false);
+                    }
+                  }}
+                  disabled={isSavingConfig}
+                >
+                  {isSavingConfig ? 'Saving...' : 'Save Configuration'}
+                </button>
+              </div>
+            ) : (
+              <p style={{ color: 'var(--color-text-muted)' }}>Loading configuration...</p>
+            )}
+          </div>
         </div>
       )}
     </div>

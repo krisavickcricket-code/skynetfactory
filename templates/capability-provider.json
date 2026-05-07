@@ -1,0 +1,57 @@
+{
+  "module_id": "example.data_provider",
+  "version": "1.0.0",
+  "category": "data",
+  "capability_type": "provider",
+  "purpose": "A data provider module that exposes a CRUD REST API over an in-memory key-value store with TTL support. Provides structured data access for downstream modules without requiring external database dependencies.",
+  "reuse_scope": ["Caching layer for computed results", "Session storage backend", "Configuration source for test fixtures"],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "endpoints": [
+      { "method": "GET", "path": "/items/:id", "description": "Retrieve an item by ID" },
+      { "method": "POST", "path": "/items", "description": "Create or update an item with optional TTL seconds" },
+      { "method": "DELETE", "path": "/items/:id", "description": "Remove an item by ID" }
+    ]
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "purpose": "In-memory data store with TTL for ephemeral persistence",
+    "agent_usage": {
+      "when_to_use": "When downstream modules need lightweight structured storage without database setup",
+      "when_not_to_use": "When data must survive process restarts or requires relational queries"
+    },
+    "common_calls": [
+      { "description": "Store a computed result with 300s TTL", "method": "POST", "path_or_command": "/items", "input_example": { "id": "compute_result_42", "data": { "value": 99 }, "ttl": 300 }, "output_example": { "stored": true } }
+    ],
+    "failure_modes": [
+      { "condition": "TTL expired", "symptom": "GET returns 404 for previously stored item", "recovery": "Recompute and re-store the item" },
+      { "condition": "Memory pressure", "symptom": "Module may evict oldest entries", "recovery": "Increase Node heap or reduce TTLs" }
+    ],
+    "composition_tags": ["provider", "cache", "in-memory", "ttl"]
+  },
+  "acceptance_gates": ["structure_validation", "contract_validation", "unit_tests", "write_scope_validation"],
+  "vm_test_requirements": {
+    "dockerfile_required": false,
+    "compose_required": false,
+    "must_exit_zero": true
+  },
+  "forbidden_behaviors": [
+    { "description": "Must not write to filesystem", "detection_method": "write_scope_check", "severity": "critical" }
+  ],
+  "network_requirements": {
+    "requires_network": false,
+    "allow_localhost": true
+  },
+  "agent_notes": {
+    "implementation_hint": "Use a Map or plain object for the store. Implement a setInterval loop that scans for expired TTL entries every 60 seconds. Do NOT use Redis, SQLite, or any external store.",
+    "known_gotchas": "JavaScript object keys are strings. Ensure numeric IDs are handled consistently.",
+    "preferred_approach": "Create a DataProvider class with get(id), set(id, data, ttl), delete(id). Export as a Fastify/Express route handler.",
+    "avoid_approach": "Do NOT add authentication or rate limiting — that belongs in a gateway module."
+  },
+  "test_cases": [
+    { "name": "store and retrieve", "input": { "method": "POST", "path": "/items", "body": { "id": "test1", "data": { "a": 1 }, "ttl": 10 } }, "expected_status": 200 },
+    { "name": "get existing item", "input": { "method": "GET", "path": "/items/test1" }, "expected_status": 200, "expected_body": { "id": "test1", "data": { "a": 1 } } },
+    { "name": "get expired item", "input": { "method": "GET", "path": "/items/expired" }, "expected_status": 404 }
+  ]
+}

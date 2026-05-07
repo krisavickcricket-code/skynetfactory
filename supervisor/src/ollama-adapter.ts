@@ -11,6 +11,7 @@ import { createHash } from 'node:crypto';
 import { promisify } from 'node:util';
 import { getConfig, ROOT_DIR } from './config.js';
 import { loadState, saveState } from './state-machine.js';
+import { lookup as registryLookup } from './registry.js';
 
 const execAsync = promisify(exec);
 
@@ -200,6 +201,31 @@ export function buildTaskPacket(moduleId: string, contract: Record<string, unkno
 }
 
 /**
+ * Look up dependency modules in the registry and return sidecar common_calls for prompt injection.
+ */
+function resolveDependencySidecars(dependencies: any[]): string {
+  if (!dependencies || dependencies.length === 0) return 'None';
+  const resolved: string[] = [];
+  for (const dep of dependencies) {
+    const depId = typeof dep === 'string' ? dep : dep.module_id;
+    const purpose = typeof dep === 'string' ? '' : (dep.purpose || '');
+    const entry = registryLookup(depId);
+    if (entry && entry.sidecar_path) {
+      try {
+        const sidecar = JSON.parse(readFileSync(entry.sidecar_path, 'utf-8'));
+        const calls = (sidecar.common_calls || []).map((c: any) => `${c.method} ${c.path_or_command}`).join(', ');
+        resolved.push(`- ${depId}: ${purpose || sidecar.purpose || 'no purpose'} (calls: ${calls || 'unknown'})`);
+      } catch {
+        resolved.push(`- ${depId}: ${purpose || 'registry entry found but sidecar unreadable'}`);
+      }
+    } else {
+      resolved.push(`- ${depId}: ${purpose || 'not yet in registry — implementer must follow its contract'}`);
+    }
+  }
+  return resolved.join('\n');
+}
+
+/**
  * Translate module contract to LLM prompt per contract_to_prompt_translation
  */
 export function contractToPrompt(contract: Record<string, unknown>, taskPacket: TaskPacket): string {
@@ -207,15 +233,21 @@ export function contractToPrompt(contract: Record<string, unknown>, taskPacket: 
   const runtime = (contract.runtime as string) || 'node';
   const worktreePath = join(ROOT_DIR, 'worktrees', String(contract.module_id));
 
+  const testCases = (contract.test_cases as any[]) || [];
+  const testCaseSection = testCases.length > 0
+    ? `\n## Required Test Cases\n\nYour tests MUST verify ALL of the following scenarios:\n${testCases.map((tc, i) => `${i + 1}. **${tc.name}** — input: ${JSON.stringify(tc.input)}, expected status: ${tc.expected_status}${tc.expected_body ? `, expected body: ${JSON.stringify(tc.expected_body)}` : ''}${tc.notes ? ` (${tc.notes})` : ''}`).join('\n')}\n`
+    : '';
+
   const sections = [
     `You are a module implementer for SkyNetFactory. You receive a module contract and produce a complete, tested, production-ready implementation. Follow the contract exactly. Do not add features beyond the contract. Do not skip any required test or file.`,
     `\n## Module Contract\n\n\`\`\`json\n${JSON.stringify(contract, null, 2)}\n\`\`\`\n`,
     `\n## Implementation Requirements\n\n- API endpoints: ${(contract.api as any)?.endpoints?.map((e: any) => `${e.method} ${e.path}`).join(', ') || 'N/A'}
-- Dependencies: ${JSON.stringify(contract.dependencies || [])}
+- Dependencies:\n${resolveDependencySidecars((contract.dependencies as any[]) || [])}
 - Network: ${(contract.network_requirements as any)?.requires_network ? 'Required' : 'Not required'}
 - Forbidden: ${(contract.forbidden_behaviors as any)?.map((fb: any) => fb.description).join('; ') || 'None'}`,
     `\n## Output Structure (${language})\n\nRequired files: ${(getRequiredPaths(language) || []).join(', ')}`,
     `\n## Sidecar Specification\n\nFill out module.sidecar.json based on the following specification:\n\`\`\`json\n${JSON.stringify(contract.sidecar_specification, null, 2)}\n\`\`\``,
+    testCaseSection,
     `\n## Constraints\n\n1. Write scope: ${taskPacket.write_scope.join(', ')}\n2. Allowed commands: ${[...(ALLOWED_COMMANDS[runtime] || []), ...ALLOWED_COMMANDS.common].join(', ')}\n3. Network: ${(contract.network_requirements as any)?.requires_network ? 'External network access ALLOWED per allowed_hosts' : 'NO network access allowed'}\n4. Temperature: ${taskPacket.temperature}, Seed: ${taskPacket.seed}\n5. Working directory: ${worktreePath}`,
   ];
 

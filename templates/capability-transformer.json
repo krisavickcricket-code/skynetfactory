@@ -1,0 +1,56 @@
+{
+  "module_id": "example.data_transformer",
+  "version": "1.0.0",
+  "category": "processing",
+  "capability_type": "transformer",
+  "purpose": "A data transformer module that accepts JSON payloads and applies a configurable transformation pipeline (filter, map, reshape) declaratively specified in the request. Enables agents to restructure data without writing imperative code.",
+  "reuse_scope": ["ETL pipeline step", "API response normalization", "Data migration preprocessing"],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "endpoints": [
+      { "method": "POST", "path": "/transform", "description": "Apply transformation pipeline to input JSON" },
+      { "method": "GET", "path": "/transform/pipeline/:name", "description": "Retrieve a named pipeline definition" }
+    ]
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "purpose": "Declarative JSON-to-JSON transformation engine",
+    "agent_usage": {
+      "when_to_use": "When you need to reshape, filter, or derive fields from JSON data without custom code",
+      "when_not_to_use": "When complex business logic or database joins are required"
+    },
+    "common_calls": [
+      { "description": "Rename and pick fields", "method": "POST", "path_or_command": "/transform", "input_example": { "pipeline": [{ "op": "pick", "fields": ["name", "email"] }, { "op": "rename", "mapping": { "email": "contact" } }], "data": { "name": "A", "email": "a@b.com", "age": 30 } }, "output_example": { "name": "A", "contact": "a@b.com" } }
+    ],
+    "failure_modes": [
+      { "condition": "Missing field in pick operation", "symptom": "Field omitted silently from output", "recovery": "Use default values or validate input before transform" },
+      { "condition": "Cyclic rename mapping", "symptom": "Transformation fails with error", "recovery": "Fix pipeline definition to avoid cycles" }
+    ],
+    "composition_tags": ["transformer", "etl", "json", "declarative"]
+  },
+  "acceptance_gates": ["structure_validation", "contract_validation", "unit_tests"],
+  "vm_test_requirements": {
+    "dockerfile_required": false,
+    "compose_required": false,
+    "must_exit_zero": true
+  },
+  "forbidden_behaviors": [
+    { "description": "Must not execute arbitrary code from pipeline", "detection_method": "static_analysis", "severity": "critical", "static_analysis_config": { "tool": "eslint", "rules": ["no-eval"] } }
+  ],
+  "network_requirements": {
+    "requires_network": false,
+    "allow_localhost": true
+  },
+  "agent_notes": {
+    "implementation_hint": "Support operations: pick, omit, rename, flatten, mapValues (basic arithmetic), filter. Use pure functions only. Return a NEW object — never mutate input.",
+    "known_gotchas": "Nested field paths like 'user.address.city' require safe traversal. Handle null/undefined intermediate nodes gracefully.",
+    "preferred_approach": "Create a PipelineRunner class that takes an array of operation objects and applies them sequentially. Each op returns a transformed copy.",
+    "avoid_approach": "Do NOT use JSON.parse with reviver for arbitrary code execution. Do NOT mutate input data in place."
+  },
+  "test_cases": [
+    { "name": "pick and rename", "input": { "method": "POST", "path": "/transform", "body": { "pipeline": [{ "op": "pick", "fields": ["a"] }, { "op": "rename", "mapping": { "a": "alpha" } }], "data": { "a": 1, "b": 2 } } }, "expected_status": 200, "expected_body": { "alpha": 1 } },
+    { "name": "omit fields", "input": { "method": "POST", "path": "/transform", "body": { "pipeline": [{ "op": "omit", "fields": ["b"] }], "data": { "a": 1, "b": 2 } } }, "expected_status": 200, "expected_body": { "a": 1 } },
+    { "name": "preserve original", "input": { "method": "POST", "path": "/transform", "body": { "pipeline": [{ "op": "mapValues", "fn": "x => x * 2" }], "data": { "a": 5 } } }, "expected_status": 400, "notes": "string expressions rejected — must not eval" }
+  ]
+}

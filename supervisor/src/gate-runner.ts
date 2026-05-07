@@ -9,6 +9,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from '
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { getConfig, ROOT_DIR } from './config.js';
+import { compileModuleContractValidator, compileSidecarValidator } from './schema-validation.js';
 
 const execAsync = promisify(exec);
 
@@ -113,16 +114,7 @@ async function runContractValidation(worktreePath: string, startTime: number): P
 
   try {
     const contractData = JSON.parse(readFileSync(contractPath, 'utf-8'));
-    // Validate against schema using Ajv (dynamic import for ESM/CJS compat)
-    const AjvModule = await import('ajv');
-    const AjvClass = AjvModule.default as any;
-    const formatsModule = await import('ajv-formats');
-    const ajv = new AjvClass();
-    (formatsModule as any).default(ajv);
-
-    const schemaPath = join(ROOT_DIR, 'module-contracts/_instructions/MODULE_CONTRACT_SCHEMA.json');
-    const schema = JSON.parse(readFileSync(schemaPath, 'utf-8'));
-    const validate = ajv.compile(schema);
+    const validate = await compileModuleContractValidator();
 
     if (validate(contractData)) {
       return { gate_name: 'contract_validation', result: 'pass', details: 'Contract is schema-compliant', duration_ms: Date.now() - startTime };
@@ -141,15 +133,7 @@ async function runSidecarValidation(worktreePath: string, startTime: number): Pr
 
   try {
     const sidecarData = JSON.parse(readFileSync(sidecarPath, 'utf-8'));
-    const AjvModule2 = await import('ajv');
-    const AjvClass2 = AjvModule2.default as any;
-    const formatsModule2 = await import('ajv-formats');
-    const ajv2 = new AjvClass2();
-    (formatsModule2 as any).default(ajv2);
-
-    const schemaPath = join(ROOT_DIR, 'module-contracts/_instructions/SIDECAR_SCHEMA.json');
-    const schema = JSON.parse(readFileSync(schemaPath, 'utf-8'));
-    const validate = ajv2.compile(schema);
+    const validate = await compileSidecarValidator();
 
     if (validate(sidecarData)) {
       return { gate_name: 'sidecar_validation', result: 'pass', details: 'Sidecar is schema-compliant', duration_ms: Date.now() - startTime };
@@ -291,7 +275,7 @@ async function checkForNetworkCalls(worktreePath: string, language: string): Pro
       : 'fetch(\\|axios\\.|http\\.get\\|http\\.post\\|request(';
 
     const { stdout } = await execAsync(
-      `grep -r "${pattern}" --include="*.ts" --include="*.js" --include="*.py" --include="*.go" --include="*.rs" "${worktreePath}/src/" 2>nul || echo ""`,
+      `grep -r "${pattern}" --include="*.ts" --include="*.js" --include="*.py" --include="*.go" --include="*.rs" "${worktreePath}/src/" || echo ""`,
       { timeout: 10000 }
     );
     return stdout.trim().length > 0;
@@ -305,16 +289,16 @@ async function runStaticAnalysis(worktreePath: string, config: any, language: st
     let command = '';
     switch (config.tool) {
       case 'eslint':
-        command = `npx eslint --rule "${config.rules.map((r: string) => JSON.stringify({ [r]: 'error' })).join(',')}" "${worktreePath}/src/" --format json 2>nul`;
+        command = `npx eslint --rule "${config.rules.map((r: string) => JSON.stringify({ [r]: 'error' })).join(',')}" "${worktreePath}/src/" --format json`;
         break;
       case 'ruff':
-        command = `ruff check --select ${config.rules.join(',')} "${worktreePath}/src/" 2>nul`;
+        command = `ruff check --select ${config.rules.join(',')} "${worktreePath}/src/"`;
         break;
       case 'golangci-lint':
-        command = `golangci-lint run --enable ${config.rules.join(',')} "${worktreePath}" 2>nul`;
+        command = `golangci-lint run --enable ${config.rules.join(',')} "${worktreePath}"`;
         break;
       case 'clippy':
-        command = `cargo clippy -- -D ${config.rules.join(' -D ')} 2>nul`;
+        command = `cargo clippy -- -D ${config.rules.join(' -D ')}`;
         break;
       case 'custom':
         command = config.custom_command || '';

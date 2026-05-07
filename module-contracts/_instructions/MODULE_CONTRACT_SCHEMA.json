@@ -30,12 +30,12 @@
     "reuse_scope": { "type": "array", "items": { "type": "string", "minLength": 5 }, "minItems": 1 },
     "language": { "type": "string", "enum": ["typescript","javascript","python","go","rust"] },
     "runtime": { "type": "string", "enum": ["node","deno","bun","python3","go","native"] },
-    "api": { "$ref": "api_schema.json" },
+    "api": { "$ref": "skynetfactory://schemas/api/v1.1" },
     "dependencies": {
       "type": "array",
-      "items": { "$ref": "dependency_schema.json" }
+      "items": { "$ref": "skynetfactory://schemas/dependency/v1.1" }
     },
-    "sidecar_specification": { "$ref": "sidecar_schema.json" },
+    "sidecar_specification": { "$ref": "skynetfactory://schemas/sidecar/v1.1" },
     "network_requirements": {
       "type": "object",
       "properties": {
@@ -112,6 +112,22 @@
         "preferred_approach": { "type": "string" },
         "avoid_approach": { "type": "string" }
       }
+    },
+    "test_cases": {
+      "type": "array",
+      "description": "Explicit test expectations that generated unit/contract tests MUST verify",
+      "items": {
+        "type": "object",
+        "required": ["name", "input", "expected_status"],
+        "properties": {
+          "name": { "type": "string", "description": "Human-readable test case name" },
+          "input": { "type": "object", "description": "Input payload or request descriptor" },
+          "expected_status": { "type": "integer", "description": "Expected HTTP status code or exit code" },
+          "expected_body": { "type": "object", "description": "Expected response body (JSON shape)" },
+          "notes": { "type": "string", "description": "Edge cases or preconditions" }
+        }
+      },
+      "minItems": 1
     }
   },
   "additionalProperties": false

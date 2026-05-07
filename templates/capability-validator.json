@@ -1,0 +1,58 @@
+{
+  "module_id": "example.validator",
+  "version": "1.0.0",
+  "category": "validation",
+  "capability_type": "validator",
+  "purpose": "A reusable input validator that accepts a schema definition and validates incoming data objects against it, returning structured error messages. Used to enforce data integrity at API boundaries.",
+  "reuse_scope": ["REST API request validation", "form data sanitization", "configuration file validation"],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "endpoints": [
+      { "method": "POST", "path": "/validate", "description": "Validate a JSON payload against a schema" },
+      { "method": "GET", "path": "/schemas", "description": "List available validation schemas" }
+    ]
+  },
+  "dependencies": [
+    { "module_id": "npm:zod", "version_constraint": "^3.22.0", "purpose": "Schema definition and runtime validation" }
+  ],
+  "sidecar_specification": {
+    "purpose": "Input validation middleware for API endpoints",
+    "agent_usage": {
+      "when_to_use": "Before processing any untrusted input, especially user-facing APIs",
+      "when_not_to_use": "When input is already validated upstream or fully trusted"
+    },
+    "common_calls": [
+      { "description": "Validate a user registration payload", "method": "POST", "path_or_command": "/validate", "input_example": { "email": "user@example.com", "age": 25 }, "output_example": { "valid": true, "errors": [] } }
+    ],
+    "failure_modes": [
+      { "condition": "Schema mismatch", "symptom": "Returns validation errors array", "recovery": "Return 400 with error details to caller" },
+      { "condition": "Unknown schema requested", "symptom": "404 from /schemas endpoint", "recovery": "Register the new schema first" }
+    ],
+    "composition_tags": ["validator", "middleware", "zod", "typescript"]
+  },
+  "acceptance_gates": ["structure_validation", "contract_validation", "unit_tests"],
+  "vm_test_requirements": {
+    "dockerfile_required": false,
+    "compose_required": false,
+    "must_exit_zero": true
+  },
+  "forbidden_behaviors": [
+    { "description": "Must not mutate input object", "detection_method": "static_analysis", "severity": "high", "static_analysis_config": { "tool": "eslint", "rules": ["no-param-reassign"] } }
+  ],
+  "network_requirements": {
+    "requires_network": false,
+    "allow_localhost": true
+  },
+  "agent_notes": {
+    "implementation_hint": "Use Zod for schema definitions. The /validate endpoint should accept { schemaName, payload } and return { valid: boolean, errors: string[] }. Do NOT use ajv or joi — Zod only.",
+    "known_gotchas": "Zod refinements can throw confusing errors. Always use safeParse and map issues to flat strings.",
+    "preferred_approach": "Create a SchemaRegistry class that loads schemas from a local directory. Cache parsed schemas.",
+    "avoid_approach": "Do NOT inline schemas in route handlers. Do NOT mutate the input payload during validation."
+  },
+  "test_cases": [
+    { "name": "valid payload passes", "input": { "schemaName": "user", "payload": { "email": "a@b.com", "age": 30 } }, "expected_status": 200, "expected_body": { "valid": true, "errors": [] } },
+    { "name": "invalid email fails", "input": { "schemaName": "user", "payload": { "email": "not-an-email", "age": 30 } }, "expected_status": 200, "expected_body": { "valid": false, "errors": ["email must be valid"] } },
+    { "name": "unknown schema returns 404", "input": { "schemaName": "nonexistent", "payload": {} }, "expected_status": 404 }
+  ]
+}

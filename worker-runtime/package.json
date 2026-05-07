@@ -5,7 +5,7 @@
   "type": "module",
   "main": "dist/worker.js",
   "scripts": {
-    "start": "tsx src/worker.ts",
+    "start": "tsx ollama-worker/src/worker.ts",
     "build": "tsc"
   },
   "engines": { "node": ">=18.0.0" },

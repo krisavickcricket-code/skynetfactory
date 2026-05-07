@@ -1,0 +1,18 @@
+{
+  "name": "skynetfactory",
+  "version": "1.4.0",
+  "description": "Automated module generation pipeline",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "setup": "node scripts/setup.js",
+    "build": "npm run build:supervisor && npm run build:worker && npm run build:ui",
+    "build:supervisor": "cd supervisor && npm run build",
+    "build:worker": "cd worker-runtime && npm run build",
+    "build:ui": "cd ui/electron-app && npm run build",
+    "start": "node scripts/start.js",
+    "start:ui": "cd ui/electron-app && npm run electron:dev",
+    "test": "cd supervisor && npm test",
+    "lint": "cd supervisor && npx tsc --noEmit"
+  }
+}

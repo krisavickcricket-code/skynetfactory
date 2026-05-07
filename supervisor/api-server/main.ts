@@ -21,6 +21,50 @@ import { join } from 'node:path';
 
 const PENDING_DIR = join(ROOT_DIR, 'module-contracts/pending');
 
+function writeRemediationLog(
+  moduleId: string,
+  attempt: number,
+  gateResult: any,
+  modelUsed: string,
+  contract: any
+): void {
+  const failedGates = gateResult.individual_results.filter((r: any) => r.result === 'fail');
+  const suggestions: string[] = [];
+
+  for (const fg of failedGates) {
+    if (fg.gate_name === 'structure_validation') {
+      suggestions.push(`Add missing required directories/files per the ${contract.language} required_paths list.`);
+    } else if (fg.gate_name === 'unit_tests') {
+      suggestions.push(`Ensure test files exist and all test_cases in the contract are implemented. Run tests locally before submission.`);
+    } else if (fg.gate_name === 'contract_validation') {
+      suggestions.push(`Validate module.contract.json against MODULE_CONTRACT_SCHEMA.json. Check field types and required fields.`);
+    } else if (fg.gate_name === 'write_scope_validation') {
+      suggestions.push(`Ensure the LLM only writes files within the declared write_scope. No external file mutations.`);
+    } else {
+      suggestions.push(`Review ${fg.gate_name} failure: ${fg.details}`);
+    }
+  }
+
+  const logEntry = {
+    module_id: moduleId,
+    attempt,
+    timestamp: new Date().toISOString(),
+    model_used: modelUsed,
+    gate_failures: failedGates.map((fg: any) => ({
+      gate: fg.gate_name,
+      reason: fg.details,
+      duration_ms: fg.duration_ms,
+    })),
+    suggestions_for_fix: suggestions,
+    consecutive_failure_count: (loadState(moduleId)?.consecutive_failure_count || 0) + 1,
+  };
+
+  const dir = join(ROOT_DIR, 'logs', 'decisions');
+  mkdirSync(dir, { recursive: true });
+  const path = join(dir, `remediation-${moduleId}-${Date.now()}.json`);
+  writeFileSync(path, JSON.stringify(logEntry, null, 2));
+}
+
 async function main() {
   console.log('[SkyNetFactory] Starting supervisor...');
 
@@ -72,7 +116,7 @@ async function main() {
         });
       }
     });
-    watcher.on('error', (err) => {
+    watcher.on('error', (err: any) => {
       console.warn(`[SkyNetFactory] File watcher error: ${err.message}`);
     });
   } catch (err) {
@@ -136,7 +180,7 @@ async function processNewContract(moduleId: string): Promise<void> {
       }
 
       // Load contract
-      const contract = loadContract(moduleId);
+      const contract = loadContract(moduleId) as any;
       if (!contract) throw new Error(`Contract file not found for ${moduleId}`);
 
       // Transition to building
@@ -220,6 +264,9 @@ async function processNewContract(moduleId: string): Promise<void> {
             preserveFailedAttempt(moduleId, currentState.attempt_count, currentState.build_start_tag);
             rollbackWorktree(moduleId, currentState.build_start_tag);
           }
+
+          // Write structured remediation log
+          writeRemediationLog(moduleId, currentState.attempt_count, gateResult, currentState.model_used || 'unknown', contract);
 
           transitionContract(moduleId, 'remediation', `gate failure: ${gateResult.individual_results.filter(r => r.result === 'fail').map(r => r.gate_name).join(', ')}`, {
             consecutive_failure_count: newFailureCount,

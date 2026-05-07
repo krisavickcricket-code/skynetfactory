@@ -1,0 +1,59 @@
+{
+  "module_id": "example.external_adapter",
+  "version": "1.0.0",
+  "category": "integration",
+  "capability_type": "adapter",
+  "purpose": "An adapter module that wraps an external REST API (OpenWeatherMap-style weather service) and exposes a simplified, typed interface for downstream modules. Handles authentication header injection, response normalization, and rate-limit awareness.",
+  "reuse_scope": ["Weather data ingestion", "External API facade", "Third-party data normalization"],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "endpoints": [
+      { "method": "GET", "path": "/weather/current", "description": "Get current weather for lat/lon" },
+      { "method": "GET", "path": "/weather/forecast", "description": "Get 5-day forecast for lat/lon" }
+    ]
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "purpose": "External weather API adapter with auth injection and response normalization",
+    "agent_usage": {
+      "when_to_use": "When downstream modules need weather data without managing external API keys or response formats",
+      "when_not_to_use": "When direct external API calls are preferred for latency or when the upstream API is unavailable"
+    },
+    "common_calls": [
+      { "description": "Fetch current temperature", "method": "GET", "path_or_command": "/weather/current?lat=40.7&lon=-74", "output_example": { "temp_c": 22, "humidity": 65 } }
+    ],
+    "failure_modes": [
+      { "condition": "API key invalid", "symptom": "401 from upstream", "recovery": "Check environment variable WEATHER_API_KEY" },
+      { "condition": "Rate limit exceeded", "symptom": "429 Too Many Requests", "recovery": "Back off and retry with exponential delay" }
+    ],
+    "composition_tags": ["adapter", "external-api", "weather", "facade"]
+  },
+  "acceptance_gates": ["structure_validation", "contract_validation", "unit_tests", "network_policy_validation"],
+  "vm_test_requirements": {
+    "dockerfile_required": false,
+    "compose_required": false,
+    "must_exit_zero": true
+  },
+  "forbidden_behaviors": [
+    { "description": "Must not log API keys", "detection_method": "static_analysis", "severity": "critical", "static_analysis_config": { "tool": "eslint", "rules": ["no-console"] } },
+    { "description": "Must not call hosts outside allowed list", "detection_method": "network_egress_check", "severity": "critical" }
+  ],
+  "network_requirements": {
+    "requires_network": true,
+    "allowed_hosts": [
+      { "host": "api.openweathermap.org", "port": 443, "protocol": "https", "purpose": "Fetch weather data" }
+    ],
+    "allow_localhost": true
+  },
+  "agent_notes": {
+    "implementation_hint": "Use native fetch. Read API key from process.env.WEATHER_API_KEY. Normalize OpenWeatherMap responses to a flat { temp_c, humidity, wind_speed, condition } object.",
+    "known_gotchas": "OpenWeatherMap returns Kelvin by default. Ensure conversion to Celsius. Handle 404 for invalid coordinates gracefully.",
+    "preferred_approach": "Create a WeatherClient class with fetchCurrent(lat, lon) and fetchForecast(lat, lon). Implement a simple in-memory request deduplication cache (5s TTL).",
+    "avoid_approach": "Do NOT install axios or node-fetch — use native fetch. Do NOT store the API key in source code."
+  },
+  "test_cases": [
+    { "name": "valid coordinates returned", "input": { "method": "GET", "path": "/weather/current?lat=0&lon=0" }, "expected_status": 200, "expected_body": { "temp_c": 0, "humidity": 0 } },
+    { "name": "missing lat/lon returns 400", "input": { "method": "GET", "path": "/weather/current" }, "expected_status": 400 }
+  ]
+}

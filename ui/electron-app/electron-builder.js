@@ -3,12 +3,11 @@
  * Build configuration for Windows EXE.
  */
 
-module.exports = {
+export default {
   appId: 'com.skynetfactory.app',
   productName: 'SkyNetFactory',
   win: {
     target: 'nsis',
-    icon: 'assets/icon.png',
   },
   nsis: {
     oneClick: false,
@@ -20,6 +19,7 @@ module.exports = {
   files: [
     'dist/renderer/**/*',
     'main.js',
+    'preload.js',
     'package.json',
   ],
 };

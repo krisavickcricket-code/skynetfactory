@@ -1,0 +1,60 @@
+{
+  "module_id": "example.api_gateway",
+  "version": "1.0.0",
+  "category": "networking",
+  "capability_type": "gateway",
+  "purpose": "A minimal API gateway that routes incoming HTTP requests to upstream module endpoints based on a configurable route table, aggregates responses, and handles basic error translation. Provides a unified entry point for composed module systems.",
+  "reuse_scope": ["Microservices entry point", "Module composition facade", "API versioning layer"],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "endpoints": [
+      { "method": "ANY", "path": "/gateway/*", "description": "Proxy request to configured upstream module" },
+      { "method": "GET", "path": "/gateway/routes", "description": "Return current route table" }
+    ]
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "purpose": "Route aggregator and error translator for composed modules",
+    "agent_usage": {
+      "when_to_use": "When multiple modules need a single HTTP entry point with unified error handling",
+      "when_not_to_use": "When client can call individual modules directly or when load balancing is required"
+    },
+    "common_calls": [
+      { "description": "Route to upstream validator module", "method": "POST", "path_or_command": "/gateway/api/v1/validate", "input_example": { "body": { "email": "a@b.com" } }, "output_example": { "upstream_status": 200, "response": { "valid": true } } }
+    ],
+    "failure_modes": [
+      { "condition": "Upstream unreachable", "symptom": "504 Gateway Timeout", "recovery": "Check upstream module health; retry once" },
+      { "condition": "Route not configured", "symptom": "404 No matching route", "recovery": "Add route to /gateway/routes configuration" }
+    ],
+    "composition_tags": ["gateway", "router", "proxy", "aggregator"]
+  },
+  "acceptance_gates": ["structure_validation", "contract_validation", "unit_tests", "network_policy_validation"],
+  "vm_test_requirements": {
+    "dockerfile_required": false,
+    "compose_required": false,
+    "must_exit_zero": true
+  },
+  "forbidden_behaviors": [
+    { "description": "Must not call external URLs not in route table", "detection_method": "network_egress_check", "severity": "critical" },
+    { "description": "Must not cache responses without explicit Cache-Control", "detection_method": "write_scope_validation", "severity": "medium" }
+  ],
+  "network_requirements": {
+    "requires_network": true,
+    "allowed_hosts": [
+      { "host": "localhost", "port": null, "protocol": "http", "purpose": "Upstream modules running on localhost" }
+    ],
+    "allow_localhost": true
+  },
+  "agent_notes": {
+    "implementation_hint": "Use native http.request or node-fetch. Load route table from a local routes.json file at startup. Support wildcard path segments.",
+    "known_gotchas": "Response body streams must be consumed or piped. Do NOT use Express res.json() on proxy responses unless you buffer the body.",
+    "preferred_approach": "Create a RouteTable class that maps path patterns to { upstreamHost, upstreamPath }. Handle 4xx/5xx by wrapping upstream responses in a standard envelope { upstream_status, response, error }.",
+    "avoid_approach": "Do NOT implement authentication, rate limiting, or request rewriting here — those are separate modules."
+  },
+  "test_cases": [
+    { "name": "valid route proxies", "input": { "method": "GET", "path": "/gateway/api/v1/health" }, "expected_status": 200 },
+    { "name": "unknown route returns 404", "input": { "method": "GET", "path": "/gateway/unknown/path" }, "expected_status": 404 },
+    { "name": "route table list", "input": { "method": "GET", "path": "/gateway/routes" }, "expected_status": 200 }
+  ]
+}

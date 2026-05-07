@@ -1,0 +1,38 @@
+{
+  "module_id": "test.sample_module",
+  "current_state": "remediation",
+  "attempt_count": 1,
+  "remediation_count": 1,
+  "last_transition_at": "2026-05-07T03:06:14.687Z",
+  "last_worker_id": null,
+  "lock_holder_worker_id": null,
+  "build_start_tag": "build-start-1-1778123174104",
+  "model_used": "qwen3-coder",
+  "consecutive_failure_count": 1,
+  "history": [
+    {
+      "from_state": "pending",
+      "to_state": "claimed",
+      "at": "2026-05-07T03:06:13.128Z",
+      "reason": "supervisor claimed contract"
+    },
+    {
+      "from_state": "claimed",
+      "to_state": "building",
+      "at": "2026-05-07T03:06:14.404Z",
+      "reason": "Ollama worker starting"
+    },
+    {
+      "from_state": "building",
+      "to_state": "testing",
+      "at": "2026-05-07T03:06:14.414Z",
+      "reason": "worker completed, running gates"
+    },
+    {
+      "from_state": "testing",
+      "to_state": "remediation",
+      "at": "2026-05-07T03:06:14.687Z",
+      "reason": "gate failure: structure_validation, contract_validation"
+    }
+  ]
+}
