@@ -1,0 +1,13 @@
+{
+  "module_id": "filesystem.path_guard",
+  "current_state": "pending",
+  "attempt_count": 0,
+  "remediation_count": 0,
+  "last_transition_at": "2026-05-07T05:40:32.3037982Z",
+  "last_worker_id": null,
+  "lock_holder_worker_id": null,
+  "build_start_tag": null,
+  "model_used": null,
+  "consecutive_failure_count": 0,
+  "history": []
+}

@@ -1,0 +1,154 @@
+{
+  "module_id": "android.intent_filter_analyzer",
+  "version": "0.1.0",
+  "category": "mobile",
+  "capability_type": "analyzer",
+  "purpose": "Analyze Android intent-filter descriptors from manifest data and report deep link exposure, browsable activities, and missing host constraints.",
+  "reuse_scope": [
+    "Android deep link audits",
+    "mobile security review",
+    "manifest metadata analysis",
+    "CI checks for exported activities"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/android/intents/analyze",
+        "input_schema": "IntentAnalyzeRequest",
+        "output_schema": "IntentAnalyzeResult",
+        "description": "Analyze normalized Android component intent filters for risky deep link exposure."
+      }
+    ],
+    "schemas": {
+      "IntentAnalyzeRequest": {
+        "type": "object",
+        "required": ["components"],
+        "properties": {
+          "components": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "type", "exported", "intent_filters"],
+              "properties": {
+                "name": { "type": "string" },
+                "type": { "type": "string" },
+                "exported": { "type": "boolean" },
+                "intent_filters": { "type": "array", "items": { "type": "object" } }
+              }
+            }
+          }
+        }
+      },
+      "IntentAnalyzeResult": {
+        "type": "object",
+        "required": ["findings"],
+        "properties": {
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["severity", "message", "component"],
+              "properties": {
+                "severity": { "type": "string", "enum": ["info", "warning", "high"] },
+                "message": { "type": "string" },
+                "component": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "android.intent_filter_analyzer",
+    "version": "0.1.0",
+    "purpose": "Android intent-filter risk analyzer for manifest-derived component metadata.",
+    "agent_usage": {
+      "when_to_use": "Use after android.manifest_analyzer or another manifest parser extracts component intent filters.",
+      "when_not_to_use": "Do not use for runtime Android intent dispatch simulation or APK bytecode analysis.",
+      "example_workflow": "1) Parse manifest components. 2) Submit normalized components to /android/intents/analyze. 3) Review browsable and exported deep link findings."
+    },
+    "common_calls": [
+      {
+        "description": "Analyze exported browsable activity",
+        "method": "POST",
+        "path_or_command": "/api/v1/android/intents/analyze",
+        "input_example": { "components": [{ "name": ".MainActivity", "type": "activity", "exported": true, "intent_filters": [{ "actions": ["android.intent.action.VIEW"], "categories": ["android.intent.category.BROWSABLE"], "data": [{ "scheme": "https" }] }] }] },
+        "output_example": { "findings": [{ "severity": "warning", "message": "Browsable deep link does not declare a host.", "component": ".MainActivity" }] }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Intent filter descriptor is missing expected arrays",
+        "symptom": "400 response describing malformed component input",
+        "recovery": "Normalize manifest parser output before analysis",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["android", "intent", "deeplink", "mobile", "analyzer"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    },
+    {
+      "description": "Must not execute Android build tools or APK installers",
+      "detection_method": "static_analysis",
+      "severity": "high",
+      "static_analysis_config": {
+        "tool": "eslint",
+        "rules": ["no-child-process"]
+      }
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Treat each component intent_filters item as normalized data with actions, categories, and data arrays. Flag exported activities with BROWSABLE and VIEW. Flag https/http data entries missing host.",
+    "known_gotchas": "Manifest parsers often output a single object instead of an array. This module expects normalized arrays and should return 400 if shape is not normalized.",
+    "preferred_approach": "Keep analyzer independent from XML parsing so it composes with android.manifest_analyzer.",
+    "avoid_approach": "Do not call adb, aapt, gradle, or apktool, and do not infer runtime behavior beyond manifest descriptors."
+  },
+  "test_cases": [
+    {
+      "name": "browsable deep link without host warns",
+      "input": { "method": "POST", "path": "/android/intents/analyze", "body": { "components": [{ "name": ".MainActivity", "type": "activity", "exported": true, "intent_filters": [{ "actions": ["android.intent.action.VIEW"], "categories": ["android.intent.category.BROWSABLE"], "data": [{ "scheme": "https" }] }] }] } },
+      "expected_status": 200,
+      "expected_body": { "findings": [{ "severity": "warning", "component": ".MainActivity" }] }
+    }
+  ]
+}

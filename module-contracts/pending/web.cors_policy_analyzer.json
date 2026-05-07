@@ -1,0 +1,136 @@
+{
+  "module_id": "web.cors_policy_analyzer",
+  "version": "0.1.0",
+  "category": "security",
+  "capability_type": "analyzer",
+  "purpose": "Analyze declared CORS policy settings and report insecure combinations for web APIs before deployment.",
+  "reuse_scope": [
+    "web API deployment checks",
+    "gateway configuration review",
+    "security audit preparation",
+    "integration test validation"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/cors/analyze",
+        "input_schema": "CorsAnalyzeRequest",
+        "output_schema": "CorsAnalyzeResult",
+        "description": "Analyze CORS settings and return findings for risky combinations."
+      }
+    ],
+    "schemas": {
+      "CorsAnalyzeRequest": {
+        "type": "object",
+        "required": ["allowed_origins", "allow_credentials"],
+        "properties": {
+          "allowed_origins": { "type": "array", "items": { "type": "string" } },
+          "allow_credentials": { "type": "boolean" },
+          "allowed_methods": { "type": "array", "items": { "type": "string" } },
+          "allowed_headers": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "CorsAnalyzeResult": {
+        "type": "object",
+        "required": ["risk_level", "findings"],
+        "properties": {
+          "risk_level": { "type": "string", "enum": ["low", "medium", "high"] },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["severity", "message"],
+              "properties": {
+                "severity": { "type": "string", "enum": ["info", "warning", "high"] },
+                "message": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "web.cors_policy_analyzer",
+    "version": "0.1.0",
+    "purpose": "CORS configuration analyzer for web API risk review.",
+    "agent_usage": {
+      "when_to_use": "Use before deploying or changing CORS settings for a browser-facing web API.",
+      "when_not_to_use": "Do not use to enforce CORS at runtime or replace manual security review for high-risk applications.",
+      "example_workflow": "1) Build a CORS policy descriptor. 2) Call /cors/analyze. 3) Review high and warning findings before deployment."
+    },
+    "common_calls": [
+      {
+        "description": "Analyze wildcard credential policy",
+        "method": "POST",
+        "path_or_command": "/api/v1/cors/analyze",
+        "input_example": { "allowed_origins": ["*"], "allow_credentials": true, "allowed_methods": ["GET", "POST"] },
+        "output_example": { "risk_level": "high", "findings": [{ "severity": "high", "message": "Wildcard origin must not be combined with credentials." }] }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Origin string is malformed",
+        "symptom": "400 response listing invalid origins",
+        "recovery": "Use valid origins or the literal wildcard when intended",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["web", "cors", "security", "api", "analyzer"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Implement deterministic checks: wildcard origin plus credentials is high, broad methods with broad headers is warning, null origin is warning, and invalid URL origins are 400 except literal '*'.",
+    "known_gotchas": "CORS origin values are origins, not full URLs with paths. Credentials change the risk of otherwise common settings.",
+    "preferred_approach": "Create analyzeCorsPolicy(policy) returning risk_level and findings sorted by severity.",
+    "avoid_approach": "Do not modify server middleware, do not make runtime allow or deny decisions, and do not fetch origins."
+  },
+  "test_cases": [
+    {
+      "name": "wildcard credentials is high risk",
+      "input": { "method": "POST", "path": "/cors/analyze", "body": { "allowed_origins": ["*"], "allow_credentials": true } },
+      "expected_status": 200,
+      "expected_body": { "risk_level": "high" }
+    }
+  ]
+}

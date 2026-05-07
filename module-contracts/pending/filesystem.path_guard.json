@@ -1,0 +1,137 @@
+{
+  "module_id": "filesystem.path_guard",
+  "version": "0.1.0",
+  "category": "storage",
+  "capability_type": "validator",
+  "purpose": "Validate and normalize caller supplied filesystem paths against an allowed root before any local file operation is attempted.",
+  "reuse_scope": [
+    "local file operation guards",
+    "desktop application import flows",
+    "agent workspace access checks",
+    "test fixture path validation"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/paths/validate",
+        "input_schema": "PathValidateRequest",
+        "output_schema": "PathValidateResult",
+        "description": "Normalize a relative path against a root and report whether it remains inside the root."
+      }
+    ],
+    "schemas": {
+      "PathValidateRequest": {
+        "type": "object",
+        "required": ["root_path", "candidate_path"],
+        "properties": {
+          "root_path": { "type": "string" },
+          "candidate_path": { "type": "string" },
+          "allow_absolute_candidate": { "type": "boolean" }
+        }
+      },
+      "PathValidateResult": {
+        "type": "object",
+        "required": ["valid", "resolved_path", "reason"],
+        "properties": {
+          "valid": { "type": "boolean" },
+          "resolved_path": { "type": "string" },
+          "reason": { "type": "string" }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "filesystem.path_guard",
+    "version": "0.1.0",
+    "purpose": "Reusable scoped path validation before filesystem access.",
+    "agent_usage": {
+      "when_to_use": "Use before a module reads, writes, lists, or deletes a local file based on user or agent supplied paths.",
+      "when_not_to_use": "Do not use as a replacement for OS permissions, sandboxing, or cloud object storage authorization.",
+      "example_workflow": "1) Accept root_path and candidate_path. 2) Call /paths/validate. 3) Continue only when valid is true."
+    },
+    "common_calls": [
+      {
+        "description": "Validate a workspace relative path",
+        "method": "POST",
+        "path_or_command": "/api/v1/paths/validate",
+        "input_example": { "root_path": "/workspace/app", "candidate_path": "data/input.json" },
+        "output_example": { "valid": true, "resolved_path": "/workspace/app/data/input.json", "reason": "inside_root" }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Candidate path escapes root after normalization",
+        "symptom": "valid false with outside_root reason",
+        "recovery": "Use a path relative to the declared root",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["filesystem", "path", "validation", "scope", "guard"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    },
+    {
+      "description": "Must not perform filesystem mutation",
+      "detection_method": "filesystem_mutation_diff",
+      "severity": "critical"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Use node:path resolve and relative. Resolve root_path first, resolve candidate_path against root_path unless allow_absolute_candidate is true, then verify relative(root, candidate) does not start with '..' and is not absolute.",
+    "known_gotchas": "Windows drive letters, UNC paths, trailing separators, and mixed slash styles can bypass naive startsWith checks.",
+    "preferred_approach": "Implement validatePath(rootPath, candidatePath, options) as a pure function with table driven tests for Windows and POSIX examples.",
+    "avoid_approach": "Do not use string concatenation, regex-only path checks, or process.cwd as an implicit root."
+  },
+  "test_cases": [
+    {
+      "name": "relative path inside root",
+      "input": { "method": "POST", "path": "/paths/validate", "body": { "root_path": "/tmp/root", "candidate_path": "a/b.txt" } },
+      "expected_status": 200,
+      "expected_body": { "valid": true }
+    },
+    {
+      "name": "parent traversal rejected",
+      "input": { "method": "POST", "path": "/paths/validate", "body": { "root_path": "/tmp/root", "candidate_path": "../secret.txt" } },
+      "expected_status": 200,
+      "expected_body": { "valid": false }
+    }
+  ]
+}

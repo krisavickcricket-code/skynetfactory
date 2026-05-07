@@ -1,0 +1,139 @@
+{
+  "module_id": "filesystem.mime_detector",
+  "version": "0.1.0",
+  "category": "storage",
+  "capability_type": "analyzer",
+  "purpose": "Detect likely MIME type and file category from file extension and optional leading bytes for upload, preview, and routing workflows.",
+  "reuse_scope": [
+    "file upload validation",
+    "document preview routing",
+    "desktop file import tools",
+    "test fixture classification"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/mime/detect",
+        "input_schema": "MimeDetectRequest",
+        "output_schema": "MimeDetectResult",
+        "description": "Detect likely MIME type from filename and optional base64 encoded header bytes."
+      }
+    ],
+    "schemas": {
+      "MimeDetectRequest": {
+        "type": "object",
+        "required": ["filename"],
+        "properties": {
+          "filename": { "type": "string" },
+          "header_base64": { "type": "string" }
+        }
+      },
+      "MimeDetectResult": {
+        "type": "object",
+        "required": ["mime_type", "source", "confidence"],
+        "properties": {
+          "mime_type": { "type": "string" },
+          "source": { "type": "string", "enum": ["signature", "extension", "unknown"] },
+          "confidence": { "type": "number" },
+          "category": { "type": "string" }
+        }
+      }
+    }
+  },
+  "dependencies": [
+    {
+      "module_id": "npm:file-type",
+      "version_constraint": "^19.0.0",
+      "purpose": "Detect binary file signatures from leading bytes",
+      "required_at": "runtime"
+    },
+    {
+      "module_id": "npm:mime-types",
+      "version_constraint": "^2.1.35",
+      "purpose": "Resolve MIME types from filename extensions",
+      "required_at": "runtime"
+    }
+  ],
+  "sidecar_specification": {
+    "module_id": "filesystem.mime_detector",
+    "version": "0.1.0",
+    "purpose": "MIME type detection for local files and upload descriptors.",
+    "agent_usage": {
+      "when_to_use": "Use when a workflow needs to classify a file before preview, validation, storage, or routing.",
+      "when_not_to_use": "Do not use as a malware scanner, content parser, or security proof that a file is safe.",
+      "example_workflow": "1) Provide filename and optional first bytes as base64. 2) Call /mime/detect. 3) Route by mime_type or category."
+    },
+    "common_calls": [
+      {
+        "description": "Detect a PNG file",
+        "method": "POST",
+        "path_or_command": "/api/v1/mime/detect",
+        "input_example": { "filename": "image.png", "header_base64": "iVBORw0KGgo=" },
+        "output_example": { "mime_type": "image/png", "source": "signature", "confidence": 0.95, "category": "image" }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Unknown extension and no recognizable signature",
+        "symptom": "application/octet-stream with low confidence",
+        "recovery": "Provide header bytes or handle file as generic binary",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["filesystem", "mime", "uploads", "classification", "files"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Use file-type to inspect Buffer.from(header_base64, 'base64') when present, then fall back to mime-types lookup(filename). Return application/octet-stream when neither source matches.",
+    "known_gotchas": "Extensions can lie and very short headers may not be enough for signature detection. Never mark confidence as 1.0 for extension-only detection.",
+    "preferred_approach": "Prefer signature results over extension results and include source so callers can decide how much to trust it.",
+    "avoid_approach": "Do not read arbitrary file paths, do not execute file content, and do not call external MIME databases."
+  },
+  "test_cases": [
+    {
+      "name": "detect by extension",
+      "input": { "method": "POST", "path": "/mime/detect", "body": { "filename": "report.pdf" } },
+      "expected_status": 200,
+      "expected_body": { "mime_type": "application/pdf", "source": "extension" }
+    }
+  ]
+}

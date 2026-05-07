@@ -1,0 +1,126 @@
+{
+  "module_id": "web.url_canonicalizer",
+  "version": "0.1.0",
+  "category": "networking",
+  "capability_type": "transformer",
+  "purpose": "Canonicalize URLs by normalizing scheme, host, port, path, and query ordering for cache keys, comparison, and request signing.",
+  "reuse_scope": [
+    "web cache key generation",
+    "API request signing",
+    "crawler URL deduplication",
+    "test fixture normalization"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/urls/canonicalize",
+        "input_schema": "UrlCanonicalizeRequest",
+        "output_schema": "UrlCanonicalizeResult",
+        "description": "Canonicalize an absolute URL without making a network request."
+      }
+    ],
+    "schemas": {
+      "UrlCanonicalizeRequest": {
+        "type": "object",
+        "required": ["url"],
+        "properties": {
+          "url": { "type": "string" },
+          "sort_query": { "type": "boolean" },
+          "drop_fragment": { "type": "boolean" },
+          "lowercase_host": { "type": "boolean" }
+        }
+      },
+      "UrlCanonicalizeResult": {
+        "type": "object",
+        "required": ["canonical_url"],
+        "properties": {
+          "canonical_url": { "type": "string" },
+          "changes": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "web.url_canonicalizer",
+    "version": "0.1.0",
+    "purpose": "Deterministic URL normalization for web workflows.",
+    "agent_usage": {
+      "when_to_use": "Use when comparing URLs, generating cache keys, preparing signatures, or deduplicating request descriptors.",
+      "when_not_to_use": "Do not use to validate ownership, crawl pages, or resolve redirects over the network.",
+      "example_workflow": "1) Submit absolute URL and normalization options. 2) Receive canonical_url. 3) Use canonical_url as a stable comparison key."
+    },
+    "common_calls": [
+      {
+        "description": "Canonicalize URL with sorted query",
+        "method": "POST",
+        "path_or_command": "/api/v1/urls/canonicalize",
+        "input_example": { "url": "HTTPS://Example.COM:443/a?b=2&a=1#top", "sort_query": true, "drop_fragment": true },
+        "output_example": { "canonical_url": "https://example.com/a?a=1&b=2", "changes": ["lowercase_host", "drop_default_port", "sort_query", "drop_fragment"] }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "URL is invalid or relative",
+        "symptom": "400 error with invalid_url code",
+        "recovery": "Provide a valid absolute URL",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["web", "url", "canonical", "cache", "normalization"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Use the WHATWG URL class. Remove default ports for http:80 and https:443. Sort query parameters by key and value only when sort_query is true. Preserve duplicate query keys.",
+    "known_gotchas": "URLSearchParams sorting can change duplicate ordering. Percent encoding normalization must be deterministic but should not double-decode reserved characters.",
+    "preferred_approach": "Build canonicalization as a pure function returning canonical_url and changes for transparent tests.",
+    "avoid_approach": "Do not call fetch, do not resolve redirects, and do not infer HTTPS availability."
+  },
+  "test_cases": [
+    {
+      "name": "lowercase host and drop default port",
+      "input": { "method": "POST", "path": "/urls/canonicalize", "body": { "url": "https://Example.com:443/a", "lowercase_host": true } },
+      "expected_status": 200,
+      "expected_body": { "canonical_url": "https://example.com/a" }
+    }
+  ]
+}

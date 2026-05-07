@@ -1,0 +1,142 @@
+{
+  "module_id": "data.csv_table_parser",
+  "version": "0.1.0",
+  "category": "data",
+  "capability_type": "transformer",
+  "purpose": "Parse CSV text into structured rows with headers, column metadata, and deterministic parse errors for imports and data processing.",
+  "reuse_scope": [
+    "spreadsheet import flows",
+    "ETL ingestion steps",
+    "test fixture loading",
+    "admin upload tooling"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/csv/parse",
+        "input_schema": "CsvParseRequest",
+        "output_schema": "CsvParseResult",
+        "description": "Parse CSV text into JSON rows using caller supplied delimiter and header options."
+      }
+    ],
+    "schemas": {
+      "CsvParseRequest": {
+        "type": "object",
+        "required": ["csv_text"],
+        "properties": {
+          "csv_text": { "type": "string" },
+          "delimiter": { "type": "string" },
+          "has_header": { "type": "boolean" }
+        }
+      },
+      "CsvParseResult": {
+        "type": "object",
+        "required": ["rows", "columns", "errors"],
+        "properties": {
+          "rows": { "type": "array", "items": { "type": "object" } },
+          "columns": { "type": "array", "items": { "type": "string" } },
+          "errors": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  },
+  "dependencies": [
+    {
+      "module_id": "npm:csv-parse",
+      "version_constraint": "^5.5.0",
+      "purpose": "Parse CSV according to common quoting, delimiter, and newline rules",
+      "required_at": "runtime"
+    }
+  ],
+  "sidecar_specification": {
+    "module_id": "data.csv_table_parser",
+    "version": "0.1.0",
+    "purpose": "CSV-to-JSON parser for import and processing workflows.",
+    "agent_usage": {
+      "when_to_use": "Use when converting uploaded or generated CSV text into structured JSON rows.",
+      "when_not_to_use": "Do not use for XLSX files, streaming huge datasets, or formulas that need spreadsheet recalculation.",
+      "example_workflow": "1) Receive csv_text from an upload or fixture. 2) Call /csv/parse. 3) Validate rows with validation.json_schema_validator."
+    },
+    "common_calls": [
+      {
+        "description": "Parse CSV with header row",
+        "method": "POST",
+        "path_or_command": "/api/v1/csv/parse",
+        "input_example": { "csv_text": "name,email\nAda,ada@example.com", "has_header": true },
+        "output_example": { "rows": [{ "name": "Ada", "email": "ada@example.com" }], "columns": ["name", "email"], "errors": [] }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Malformed quoted field",
+        "symptom": "400 response with parse error details",
+        "recovery": "Fix CSV quoting or delimiter settings",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["csv", "data", "parser", "etl", "import"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    },
+    {
+      "description": "Must not execute spreadsheet formulas",
+      "detection_method": "static_analysis",
+      "severity": "high",
+      "static_analysis_config": {
+        "tool": "eslint",
+        "rules": ["no-eval", "no-new-func"]
+      }
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Use csv-parse/sync parse with columns set from has_header. Default delimiter to comma. Trim UTF-8 BOM before parsing and return deterministic 400 errors for thrown parser exceptions.",
+    "known_gotchas": "CSV fields can contain commas, quotes, and newlines. Splitting on comma manually will corrupt valid CSV.",
+    "preferred_approach": "Use a real CSV parser and table driven tests for quoted fields, CRLF newlines, empty values, and BOM input.",
+    "avoid_approach": "Do not parse CSV with string.split(',') and do not evaluate formula-looking cell values."
+  },
+  "test_cases": [
+    {
+      "name": "parse header CSV",
+      "input": { "method": "POST", "path": "/csv/parse", "body": { "csv_text": "a,b\n1,2", "has_header": true } },
+      "expected_status": 200,
+      "expected_body": { "rows": [{ "a": "1", "b": "2" }], "columns": ["a", "b"], "errors": [] }
+    }
+  ]
+}

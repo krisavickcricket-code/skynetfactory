@@ -1,0 +1,127 @@
+{
+  "module_id": "data.object_diff_analyzer",
+  "version": "0.1.0",
+  "category": "data",
+  "capability_type": "analyzer",
+  "purpose": "Compare two JSON-compatible objects and report added, removed, changed, and unchanged paths for audits and synchronization workflows.",
+  "reuse_scope": [
+    "configuration drift reports",
+    "API response regression tests",
+    "mobile sync conflict inspection",
+    "data migration verification"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "style": "http",
+    "base_path": "/api/v1",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/objects/diff",
+        "input_schema": "ObjectDiffRequest",
+        "output_schema": "ObjectDiffResult",
+        "description": "Compare two JSON-compatible values and return path-level differences."
+      }
+    ],
+    "schemas": {
+      "ObjectDiffRequest": {
+        "type": "object",
+        "required": ["before", "after"],
+        "properties": {
+          "before": {},
+          "after": {},
+          "include_unchanged": { "type": "boolean" }
+        }
+      },
+      "ObjectDiffResult": {
+        "type": "object",
+        "required": ["added", "removed", "changed"],
+        "properties": {
+          "added": { "type": "array", "items": { "type": "string" } },
+          "removed": { "type": "array", "items": { "type": "string" } },
+          "changed": { "type": "array", "items": { "type": "string" } },
+          "unchanged": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "module_id": "data.object_diff_analyzer",
+    "version": "0.1.0",
+    "purpose": "Path-level JSON object diff analyzer.",
+    "agent_usage": {
+      "when_to_use": "Use when an agent needs a deterministic summary of how two JSON values differ.",
+      "when_not_to_use": "Do not use for binary diffs, semantic natural language diffs, or very large streaming datasets.",
+      "example_workflow": "1) Collect before and after JSON snapshots. 2) Call /objects/diff. 3) Route added, removed, and changed paths to review or sync logic."
+    },
+    "common_calls": [
+      {
+        "description": "Compare two configuration objects",
+        "method": "POST",
+        "path_or_command": "/api/v1/objects/diff",
+        "input_example": { "before": { "a": 1 }, "after": { "a": 2, "b": true } },
+        "output_example": { "added": ["/b"], "removed": [], "changed": ["/a"] }
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Input contains unsupported values",
+        "symptom": "400 response identifying non JSON-compatible input",
+        "recovery": "Serialize values to JSON-compatible primitives, arrays, and objects",
+        "severity": "permanent"
+      }
+    ],
+    "composition_tags": ["json", "diff", "audit", "sync", "analyzer"]
+  },
+  "network_requirements": {
+    "requires_network": false,
+    "allowed_hosts": [],
+    "allow_localhost": true
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation",
+    "sidecar_validation",
+    "unit_tests",
+    "contract_tests",
+    "docker_tests",
+    "write_scope_validation",
+    "forbidden_behavior_validation",
+    "network_policy_validation",
+    "registry_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": true,
+    "compose_required": true,
+    "must_exit_zero": true,
+    "extra_services": []
+  },
+  "forbidden_behaviors": [
+    {
+      "description": "Must not write outside declared scope",
+      "detection_method": "write_scope_check",
+      "severity": "critical"
+    },
+    {
+      "description": "Must not make external network calls",
+      "detection_method": "network_egress_check",
+      "severity": "high"
+    }
+  ],
+  "agent_notes": {
+    "implementation_hint": "Implement recursive comparison over JSON primitives, arrays, and plain objects. Emit RFC 6901 JSON Pointer paths. Compare arrays by index and objects by sorted keys for deterministic output.",
+    "known_gotchas": "Object key order must not affect results. NaN, Date, undefined, functions, and circular references are not JSON-compatible and should be rejected or normalized before diffing.",
+    "preferred_approach": "Use a pure diffObjects(before, after, options) function and test nested objects, arrays, null, and missing keys.",
+    "avoid_approach": "Do not use JSON.stringify equality as the only comparison because key order can create false changes."
+  },
+  "test_cases": [
+    {
+      "name": "detect added and changed paths",
+      "input": { "method": "POST", "path": "/objects/diff", "body": { "before": { "a": 1 }, "after": { "a": 2, "b": true } } },
+      "expected_status": 200,
+      "expected_body": { "added": ["/b"], "removed": [], "changed": ["/a"] }
+    }
+  ]
+}
