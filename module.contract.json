@@ -1,0 +1,65 @@
+{
+  "module_id": "test.sample_module",
+  "version": "0.1.0",
+  "category": "test",
+  "capability_type": "validator",
+  "purpose": "A sample module contract used for integration testing of the SkyNetFactory pipeline end to end",
+  "reuse_scope": [
+    "test environments only"
+  ],
+  "language": "typescript",
+  "runtime": "node",
+  "api": {
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/health",
+        "description": "Health check"
+      }
+    ]
+  },
+  "dependencies": [],
+  "sidecar_specification": {
+    "purpose": "Test module for pipeline validation",
+    "agent_usage": {
+      "when_to_use": "Never in production — for testing only",
+      "when_not_to_use": "Any production scenario"
+    },
+    "common_calls": [
+      {
+        "description": "Health check",
+        "method": "GET",
+        "path_or_command": "/health"
+      }
+    ],
+    "failure_modes": [
+      {
+        "condition": "Service down",
+        "symptom": "Non-200 response",
+        "recovery": "Restart the service"
+      }
+    ],
+    "composition_tags": [
+      "test",
+      "validator"
+    ]
+  },
+  "acceptance_gates": [
+    "structure_validation",
+    "contract_validation"
+  ],
+  "vm_test_requirements": {
+    "dockerfile_required": false,
+    "compose_required": false,
+    "must_exit_zero": true
+  },
+  "forbidden_behaviors": [],
+  "network_requirements": {
+    "requires_network": false,
+    "allow_localhost": true
+  },
+  "agent_notes": {
+    "implementation_hint": "Keep it minimal — this is a test fixture",
+    "known_gotchas": "None"
+  }
+}

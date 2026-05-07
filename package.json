@@ -1,0 +1,13 @@
+{
+  "name": "test.sample_module",
+  "version": "0.1.0",
+  "scripts": {
+    "test": "jest",
+    "test:contract": "jest tests/contract/"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "jest": "^29.0.0",
+    "typescript": "^5.0.0"
+  }
+}

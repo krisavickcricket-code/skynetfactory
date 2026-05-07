@@ -1,0 +1,27 @@
+{
+  "module_id": "test.sample_module",
+  "version": "0.1.0",
+  "purpose": "Test module for pipeline validation",
+  "agent_usage": {
+    "when_to_use": "Never in production — for testing only",
+    "when_not_to_use": "Any production scenario"
+  },
+  "common_calls": [
+    {
+      "description": "Health check",
+      "method": "GET",
+      "path_or_command": "/health"
+    }
+  ],
+  "failure_modes": [
+    {
+      "condition": "Service down",
+      "symptom": "Non-200 response",
+      "recovery": "Restart the service"
+    }
+  ],
+  "composition_tags": [
+    "test",
+    "validator"
+  ]
+}
